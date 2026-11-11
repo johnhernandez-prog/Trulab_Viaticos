@@ -1,0 +1,98 @@
+# Entorno local de Trulab Viajes (S1-02, docs/architecture.md §12).
+#
+# Uso desde la raíz del repositorio (el `.env` define COMPOSE_FILE=infra/docker-compose.yml):
+#   docker compose up -d                 # solo la base de datos
+#   docker compose --profile app up -d   # base de datos + API + frontend (cuando existan S1-03 y S1-05)
+# Sin COMPOSE_FILE en el .env:
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d
+#
+# Los servicios `api` y `frontend` están en el perfil `app` hasta que exista su código:
+# S1-03 quita el perfil de `api` y S1-05 el de `frontend`.
+# MinIO no se incluye: sus imágenes oficiales ya no se publican en registros públicos; en local se usa
+# STORAGE_BACKEND=local (SPEC.md §14: "en local, MinIO o el sistema de archivos").
+
+name: trulab-viajes
+
+services:
+  db:
+    image: postgres:16.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trulab_viajes}
+      POSTGRES_USER: ${POSTGRES_USER:-trulab_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
+    ports:
+      # Solo en localhost: la BD no queda expuesta a la red.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - trulab
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      target: dev
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      STORAGE_LOCAL_PATH: /data/storage
+      # Recarga de uvicorn sobre volúmenes montados desde Windows (no llegan eventos inotify).
+      WATCHFILES_FORCE_POLLING: "true"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    volumes:
+      - ../backend:/app
+      - api-storage:/data/storage
+    networks:
+      - trulab
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: infra/docker/frontend.Dockerfile
+      target: dev
+    environment:
+      # Vite solo expone VITE_*; el navegador llama a la API por el puerto publicado en localhost.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-5173}:5173"
+    volumes:
+      - ../frontend:/app
+      # node_modules vive en un volumen: los binarios nativos son de Linux, no de Windows.
+      - frontend-node-modules:/app/node_modules
+    networks:
+      - trulab
+    depends_on:
+      - api
+
+networks:
+  trulab:
+    name: trulab-viajes
+
+volumes:
+  pgdata:
+  api-storage:
+  frontend-node-modules:

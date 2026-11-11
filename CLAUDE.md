@@ -93,12 +93,13 @@ Se confirmaron contra la configuración y la estructura real de AppSheet. Solo c
 - **Git:** rama `main` protegida; ramas `feat/<fase>-<tema>`, `fix/...`; commits convencionales en español (`feat(gastos): subir soporte`).
 - **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día. Un hook de pre-commit bloquea cualquier `.env`.
 - **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml`; ESLint/Prettier y mypy se agregan con sus dependencias (S1-03, S1-05).
+- **Docker local:** `infra/docker-compose.yml`; desde la raíz `docker compose up -d` (gracias a `COMPOSE_FILE` en `.env`). BD en `127.0.0.1:5433` (5432 lo ocupa un PostgreSQL nativo de Windows). Sin MinIO: en local `STORAGE_BACKEND=local`. Detalle en `infra/README.md`.
 - **Python local = 3.12** (`.python-version`), en `.venv` creado con `py -3.12 -m venv .venv` e instalado con `requirements-dev.txt`. El equipo también tiene Python 3.15 como predeterminado del sistema: **no usarlo** para el proyecto (sin wheels de PyYAML). Usar siempre `.venv\Scripts\python` y `.venv\Scripts\pre-commit`.
 - **Identidad git local:** `John Hernandez <John.Hernandez@trulab.co>`; remote `origin` en GitHub (`johnhernandez-prog/Trulab_Viaticos`).
 
 ## Estado actual
 
-**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 terminada** (estructura del monorepo y configuración base); todavía no hay código de aplicación. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
+**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 y S1-02 terminadas** (estructura del monorepo, configuración base y Docker Compose); todavía no hay código de aplicación. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
 
 ## Cómo retomar
 

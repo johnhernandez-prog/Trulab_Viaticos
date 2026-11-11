@@ -8,12 +8,37 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅ terminada**; S1-02 a S1-13 pendientes |
-| Código | Solo estructura y configuración del repositorio; no hay código de aplicación |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 está en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Semana del sprint | Semana 1: **S1-01 ✅ y S1-02 ✅ terminadas**; S1-03 a S1-13 pendientes |
+| Código | Estructura, configuración y entorno Docker; no hay código de aplicación |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 y S1-02 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-11 |
 
 ## Última actividad
+
+**S1-02 · Docker Compose local.** Archivos nuevos: `infra/docker-compose.yml`, `infra/docker/backend.Dockerfile`, `infra/docker/frontend.Dockerfile` y `.dockerignore`. Modificados: `.env.example` (bloque de Compose y puertos) e `infra/README.md` (instrucciones de uso).
+
+- **Servicios:** `db` (PostgreSQL 16.4, healthcheck `pg_isready`), `api` (FastAPI con `uvicorn --reload`, código montado desde `backend/`, healthcheck a `/api/v1/health`) y `frontend` (Vite dev server, código montado desde `frontend/`). **Red** `trulab-viajes`; **volúmenes** `pgdata`, `api-storage` y `frontend-node-modules`.
+- **Uso:** desde la raíz, `docker compose up -d` (solo `db`) o `docker compose --profile app up -d` (todo). Requiere `.env` copiado de `.env.example` con `POSTGRES_PASSWORD`. Detalle en `infra/README.md`.
+
+**Decisiones técnicas de S1-02:**
+- **Compose en `infra/` + `COMPOSE_FILE` en `.env`:** la arquitectura ubica el compose en `infra/` y a la vez pide que `docker compose up` levante todo. Con `COMPOSE_FILE=infra/docker-compose.yml` en el `.env` raíz se cumplen las dos cosas (probado: la interpolación toma el `.env` raíz). Sin esa variable: `docker compose --env-file .env -f infra/docker-compose.yml ...`.
+- **`api` y `frontend` en el perfil `app`:** su código no existe todavía; si arrancaran por defecto, `docker compose up` fallaría. **S1-03 debe quitar el perfil de `api` y S1-05 el de `frontend`.**
+- **Contratos para las tareas siguientes:** el Dockerfile del backend instala dependencias desde **`backend/requirements.txt` y `backend/requirements-dev.txt`** (este incluye `-r requirements.txt`) y arranca `app.main:app`; el del frontend usa **`frontend/package.json` y `package-lock.json`** y `npm run dev`. S1-03 y S1-05 deben respetarlos o ajustar el Dockerfile.
+- **MinIO no se incluye:** sus imágenes oficiales ya no están disponibles públicamente (`minio/minio` no existe en Docker Hub; `quay.io/minio` devuelve 401). La arquitectura lo marca como opcional y admite el sistema de archivos en local (`SPEC.md` §14, `docs/architecture.md` §12), así que se usa `STORAGE_BACKEND=local` sobre el volumen `api-storage`. Si en F5 hace falta un emulador S3 local, se elige con un ADR (otra tecnología).
+- **BD en el puerto 5433 del host:** en este equipo corre un PostgreSQL nativo de Windows (servicio `postgres.exe`) en 5432. Configurable con `POSTGRES_HOST_PORT`; dentro de la red Docker sigue siendo `db:5432` (lo que usa `DATABASE_URL`).
+- **Seguridad:** todos los puertos se publican solo en `127.0.0.1`. La BD recibe solo sus tres variables (no el `.env` completo); la API recibe el `.env`. Si falta `POSTGRES_PASSWORD`, Compose se detiene con un mensaje claro. `.dockerignore` deja fuera `.git`, `.venv`, docs, `.env*` y `node_modules`. Las imágenes corren con usuario sin privilegios (`app` uid 1000, `node`).
+- **Windows:** recarga por *polling* (`WATCHFILES_FORCE_POLLING`, `CHOKIDAR_USEPOLLING`), porque los volúmenes montados desde Windows no emiten eventos de archivos; `node_modules` en volumen para no mezclar binarios de Windows y Linux.
+- **Versiones fijadas:** `postgres:16.4`, `python:3.12.7-slim-bookworm`, `node:20.18.0-bookworm-slim` (verificadas en el registro). La imagen del backend incluye Pango y HarfBuzz para WeasyPrint (ADR-010).
+- **El PostgreSQL 16 de Docker no crea todavía roles ni extensiones:** `trulab_app`, `citext` y `pgcrypto` son de S1-04.
+
+**Validaciones ejecutadas (con un `.env` temporal, luego eliminado):**
+- `docker compose config`: válido con y sin el perfil `app`; sin `POSTGRES_PASSWORD` falla con el mensaje esperado.
+- `docker compose up -d`: `db` *healthy*; `PostgreSQL 16.4` responde; accesible desde Windows en `127.0.0.1:5433` y desde la red interna como `db:5432`.
+- Persistencia: un dato escrito sobrevivió a `down` + `up`.
+- `backend.Dockerfile --target base`: construye; Python 3.12.7, usuario `app`, `libpango`, `libpangoft2` y `libharfbuzz-subset` presentes.
+- Etapas `dev` de backend y frontend: se detienen en el `COPY` de los archivos de S1-03 y S1-05 (esperado).
+- `pre-commit run --all-files`: todo en verde.
+- Limpieza: `docker compose down -v`, imagen de prueba borrada, `.env` temporal eliminado.
 
 **S1-01 · Estructura del monorepo.** Se crearon las carpetas raíz `backend/`, `frontend/`, `infra/`, `scripts/` y `scripts/etl_appsheet/` (cada una con un README que dice qué tarea la llena) y la configuración base: `.gitignore`, `.editorconfig`, `.gitattributes`, `.env.example` y `.pre-commit-config.yaml`. No se escribió código de aplicación ni se tocaron requisitos, reglas, arquitectura, roadmap ni sprints.
 
@@ -54,6 +79,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] Baseline publicado en GitHub (`origin/main` = `62b91cf`)
 - [x] **S1-01** Estructura del monorepo y configuración base (rama `feat/f1-estructura-monorepo`)
 - [x] Entorno local con Python 3.12 (`.venv`), `pre-commit install` y `pre-commit run --all-files` en verde
+- [x] **S1-02** Docker Compose local: PostgreSQL 16, API y frontend (perfil `app`), red y volúmenes
 
 ## Trabajo pendiente
 
@@ -66,7 +92,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-02** · `docker-compose.yml` con PostgreSQL 16, API con recarga, frontend y MinIO opcional (3 h, depende de S1-01; skill `agent-skills:ci-cd-and-automation`). Docker Desktop ya está operativo. S1-05 (frontend) también depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
+**S1-03** · Backend esqueleto: FastAPI, `core/config`, `core/db`, `/health`, errores problem+json, `X-Request-ID` y logs estructurados (4 h, depende de S1-02; skills `agent-skills:api-and-interface-design`, `agent-skills:build`). Debe crear `backend/requirements.txt` y `requirements-dev.txt`, exponer `app.main:app` y `/api/v1/health`, y quitar el perfil `app` del servicio `api`. S1-05 (frontend) depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
@@ -137,6 +163,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - `pre-commit` no ejecutado por falta de Python 3.12/Docker; validación manual equivalente sobre los archivos nuevos.
 - Se detuvo tras S1-01 a pedido del usuario.
 - Corrección del entorno: Python 3.12.10 instalado junto a 3.15 (sin tocarlo), `.venv` con 3.12, `.python-version`, `requirements-dev.txt`, pre-commit fijado a 3.12. `pre-commit run --all-files` en verde. Commit en la misma rama; sin merge ni push.
+- S1-02: Docker Compose en `infra/` (db PostgreSQL 16.4; api y frontend en el perfil `app`), Dockerfiles de desarrollo, `.dockerignore`. MinIO descartado (imágenes no disponibles); BD en el puerto 5433 del host por un PostgreSQL nativo en 5432. Validado con un `.env` temporal; entorno de prueba limpiado. Commit en la misma rama; sin merge ni push.
 
 ### 2026-11-11 · Sesión 3: análisis funcional definitivo (DP-13 a DP-18)
 - Resueltas DP-13, DP-14, DP-15, DP-16, DP-17 y DP-18; DP-03 absorbida por DP-13. Nuevos ADR-021 a ADR-025; ADR-017 queda reemplazado en su mecanismo por ADR-022; ADR-019 incluye DP-17.

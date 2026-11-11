@@ -1,0 +1,21 @@
+# Contexto de build = raíz del repositorio. Solo deben entrar backend/ y frontend/.
+.git
+.venv
+docs
+infra
+scripts
+*.md
+
+# Secretos (nunca en una imagen)
+.env
+.env.*
+!.env.example
+
+# Artefactos locales
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/storage
