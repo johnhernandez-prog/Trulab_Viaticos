@@ -28,21 +28,34 @@ Se definen como variables CSS (formato shadcn, HSL) en `:root` y se consumen des
 | `--muted-foreground` | Texto secundario, etiquetas | `#475569` (slate-600) |
 | `--border` / `--input` | Bordes | `#E2E8F0` (slate-200) / `#CBD5E1` (slate-300) |
 | `--ring` | Foco visible | `#2563EB` (blue-600) |
-| `--success` | Éxito, estado Pagada | `#15803D` (green-700) |
-| `--warning` | Advertencias, estado Devuelta | `#B45309` (amber-700) |
+| `--success` | Éxito, estados Pagado y Procesado | `#15803D` (green-700) |
+| `--warning` | Advertencias, estados Pendiente y Devuelta, gasto sin comprobante | `#B45309` (amber-700) |
 | `--destructive` | Errores, eliminar, **saldo negativo** | `#B91C1C` (red-700) |
-| `--info` | Información, estado Legalizada | `#0369A1` (sky-700) |
+| `--info` | Información, estados Aprobado y Transferido | `#0369A1` (sky-700) |
 
 Cada color semántico tiene una variante `-subtle` (fondo claro, por ejemplo `#FEF2F2` para destructive) para insignias y alertas.
 
 ### Colores de estado de legalización
 
+> Estados reales (DP-13 ✅, RN-05). La legalización muestra **dos insignias**: estado operativo y estado financiero. Se usan solo los tonos semánticos existentes; no se crean colores nuevos. Los emojis de AppSheet (`⛔`, `⌛`) se sustituyen por iconos Lucide con texto.
+
+**Estado operativo** (`estado`, lo cambia ADMIN):
+
 | Estado | Insignia (fondo / texto) | Icono Lucide | Etiqueta |
 | :--- | :--- | :--- | :--- |
-| `BORRADOR` | slate-100 / slate-700 | `FilePen` | Borrador |
-| `LEGALIZADA` | sky-50 / sky-700 | `Send` | En revisión |
-| `DEVUELTA` | amber-50 / amber-700 | `Undo2` | Devuelta |
-| `PAGADA` | green-50 / green-700 | `CircleCheck` | Pagada |
+| `PENDIENTE` | amber-50 / amber-700 | `CircleAlert` | Pendiente |
+| `PENDIENTE` con `devuelta_at` | amber-50 / amber-700 | `Undo2` | Devuelta |
+| `APROBADO` | sky-50 / sky-700 | `BadgeCheck` | Aprobado |
+| `RECHAZADO` | red-50 / red-700 (destructive) | `CircleX` | Rechazado |
+
+**Estado financiero** (`estado_financiero`, lo cambia FINANCIERO):
+
+| Estado | Insignia (fondo / texto) | Icono Lucide | Etiqueta |
+| :--- | :--- | :--- | :--- |
+| `PENDIENTE` | slate-100 / slate-700 | `Hourglass` | Pago pendiente |
+| `TRANSFERIDO` | sky-50 / sky-700 | `ArrowRightLeft` | Transferido |
+| `PAGADO` | green-50 / green-700 | `CircleCheck` | Pagado |
+| `PROCESADO` | green-50 / green-700 | `Lock` | Procesado |
 
 ### Saldo
 
@@ -86,12 +99,12 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 
 | Variante | Uso | Ejemplo |
 | :--- | :--- | :--- |
-| `default` (primary) | Una acción principal por vista | "Legalizar", "Guardar gasto" |
+| `default` (primary) | Una acción principal por vista | "Aprobar", "Guardar gasto" |
 | `secondary` | Acciones alternativas | "Cancelar", "Descargar PDF" |
 | `outline` | Acciones terciarias en barras | Filtros |
 | `ghost` | Acciones en filas e iconos | Editar en una tabla |
 | `destructive` | Acciones irreversibles; **siempre con confirmación** | "Eliminar" |
-| `success` (custom) | Liquidación | "Marcar como pagada" |
+| `success` (custom) | Liquidación | "Marcar como pagado" |
 
 - Tamaños: `sm` (32 px, solo escritorio), `default` (40 px) y `lg` (48 px, CTA en móvil).
 - **Botón primario en móvil:** ocupa el ancho completo y va fijo al pie del formulario, por encima de la BottomBar.
@@ -117,20 +130,20 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 - Columnas numéricas alineadas a la derecha y con `tabular-nums`. Fechas en `DD/MM/AAAA`.
 - Orden por columna con indicador; filtros en una barra superior; paginación al pie con "1–20 de 134".
 - Acciones por fila en un menú `⋯` (DropdownMenu). La acción primaria puede ir visible.
-- **Tabla de Pagos:** columnas Folio, Viajero, Motivo, Fechas, Transferido, Gastado, **Saldo** (coloreado) y Estado. Al pie, una fila de totales.
+- **Tabla de Pagos:** columnas Folio, Viajero, Motivo, Fecha de legalización, Transferido, Gastado, **Saldo** (coloreado), Estado y Estado financiero. Al pie, una fila de totales.
 - Estado vacío: ilustración simple o icono, mensaje y CTA ("Aún no tienes legalizaciones. Crear la primera").
 
 ## 8. Cards
 
-- **Tarjeta de legalización (móvil):** a la izquierda la insignia de estado y el folio; a la derecha el monto total. Debajo, el motivo en una o dos líneas, el viajero (si el rol ve todas), el rango de fechas y el saldo. Toda la tarjeta es pulsable y lleva al detalle.
-- **Tarjeta de gasto:** miniatura del soporte (o icono de "sin soporte" en `warning`), descripción, fecha y valor.
+- **Tarjeta de legalización (móvil):** a la izquierda la insignia de estado y el folio; a la derecha el monto total. Debajo, el motivo en una o dos líneas, el viajero (si el rol ve todas), la fecha de legalización, el saldo y la insignia de estado financiero. Toda la tarjeta es pulsable y lleva al detalle.
+- **Tarjeta de gasto:** miniatura del soporte (icono de PDF si solo hay archivo, o icono "Falta comprobante" en `warning`), concepto, rubro, proyecto, fecha de factura y valor.
 - **Tarjeta KPI** (dashboard): etiqueta, valor grande y variación opcional.
 - Padding `p-4`, `rounded-lg`, `border`, `shadow-sm`.
 
 ## 9. Modales y diálogos
 
-- `Dialog` en escritorio y `Sheet` (panel inferior) en móvil para formularios cortos (agregar gasto, devolver con comentario).
-- `AlertDialog` para confirmar acciones destructivas o de estado: "¿Marcar LG-000123 como pagada? Saldo: −$120.000 a reembolsar".
+- `Dialog` en escritorio y `Sheet` (panel inferior) en móvil para formularios cortos (agregar gasto, devolver o rechazar con comentario).
+- `AlertDialog` para confirmar acciones destructivas o de estado: "¿Marcar LG-000123 como pagado? Saldo: −$120.000 a reembolsar".
 - Al abrir, el foco va al primer campo; `Esc` cierra; el foco vuelve al disparador al cerrar.
 - No se usan modales anidados.
 
@@ -139,7 +152,7 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 | Tipo | Componente | Uso |
 | :--- | :--- | :--- |
 | Toast | `sonner` | Confirmaciones breves ("Gasto guardado"), 4 s, en la parte inferior del móvil y arriba a la derecha en escritorio |
-| Alerta en línea | `Alert` | Mensajes persistentes de contexto: "Esta legalización fue devuelta: <comentario>" |
+| Alerta en línea | `Alert` | Mensajes persistentes de contexto: "Esta legalización fue devuelta: <comentario>" (si sigue Pendiente con `devuelta_at`) |
 | Banner | `Alert` a todo el ancho | Problemas del sistema o sin conexión |
 | Error de campo | Texto bajo el input | Validación |
 
@@ -153,7 +166,7 @@ Todo componente que consume datos implementa estos cinco estados:
 2. **Vacío:** mensaje más CTA.
 3. **Error:** mensaje y botón "Reintentar".
 4. **Éxito o datos:** el contenido.
-5. **Deshabilitado o solo lectura:** cuando el estado de la legalización no permite editar, se muestra el motivo ("Enviada a revisión el 06/11/2026").
+5. **Deshabilitado o solo lectura:** cuando el estado de la legalización no permite editar, se muestra el motivo ("Aprobada el 06/11/2026").
 
 Los estados interactivos (hover, focus-visible, active, disabled) usan un anillo de foco de 2 px `ring` con *offset*, y nunca se quita el *outline* sin un reemplazo.
 
@@ -214,7 +227,7 @@ Puntos de quiebre de Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
 ## 13. Gráficos (Recharts)
 
 - **Barras horizontales** para el consumo por proyecto (los nombres largos se leen mejor), ordenadas de mayor a menor, con el valor en la etiqueta.
-- **Dona** de estados con los mismos colores de estado del §2 y la leyenda con conteo y porcentaje. El total va al centro.
+- **Dona** de estados operativos con los mismos colores de estado del §2 y la leyenda con conteo y porcentaje. El total va al centro.
 - Tooltips con formato COP. Cada gráfico ofrece una tabla alternativa accesible (botón "Ver como tabla").
 
 ## 14. Formatos

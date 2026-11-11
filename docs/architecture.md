@@ -59,8 +59,9 @@ frontend/src/
 │   ├── auth/           # login, AuthProvider, guardas de ruta, usePermissions
 │   ├── legalizaciones/ # lista (cards/tabla), detalle, formulario, acciones
 │   ├── gastos/         # formulario con cámara, lista, visor de soporte
-│   ├── pagos/          # tabla densa de saldos, acción pagar
+│   ├── pagos/          # tabla densa de saldos, valor transferido, estado financiero
 │   ├── cargos/
+│   ├── catalogos/      # administración de proyectos, rubros y células (SUPERADMIN)
 │   ├── usuarios/
 │   └── indicadores/    # dashboard
 ├── lib/                # apiClient (fetch + refresh), formatos (COP, fechas), errores
@@ -68,7 +69,7 @@ frontend/src/
 ```
 
 **Decisiones:**
-- **Estado del servidor en TanStack Query; nada de Redux.** Casi todo el estado es remoto. Query resuelve caché, reintentos e invalidación tras las mutaciones (por ejemplo, invalidar `legalizaciones` y `pagos` después de "Pagar").
+- **Estado del servidor en TanStack Query; nada de Redux.** Casi todo el estado es remoto. Query resuelve caché, reintentos e invalidación tras las mutaciones (por ejemplo, invalidar `legalizaciones` y `pagos` después de cambiar el estado financiero).
 - **Tipos generados desde OpenAPI** (`openapi-typescript`). Así hay un contrato único entre frontend y backend y el frontend no se desincroniza.
 - **Token de acceso en memoria** (nunca en `localStorage`). El refresh token vive en una cookie httpOnly (§5). `apiClient` reintenta una vez tras un 401 llamando a `/auth/refresh`.
 - **Permisos en el frontend solo para la experiencia** (ocultar botones y rutas). `usePermissions()` lee el rol de `/me`. La autoridad es el backend.
@@ -95,7 +96,7 @@ backend/app/
 ├── core/
 │   ├── config.py           # Settings (pydantic-settings, variables de entorno)
 │   ├── db.py               # engine, SessionLocal, dependencia get_db, SET LOCAL para RLS
-│   ├── security.py         # JWT, hashing, verificación de token de Google
+│   ├── security.py         # JWT, hash de refresh tokens, verificación de token de Google
 │   ├── permissions.py      # Rol, Permiso, matriz RBAC, require_permission()
 │   ├── errors.py           # excepciones de dominio → problem+json
 │   ├── storage.py          # interfaz Storage (S3/GCS/local) + URLs firmadas
@@ -104,8 +105,8 @@ backend/app/
 │   ├── auth/               # router, schemas, service
 │   ├── usuarios/           # router, schemas, service, models
 │   ├── cargos/
-│   ├── proyectos/          # (DP-02)
-│   ├── legalizaciones/     # incluye la máquina de estados
+│   ├── catalogos/          # tablas maestras: proyectos, rubros, células (ADR-022)
+│   ├── legalizaciones/     # incluye la máquina de estados (operativa y financiera)
 │   ├── gastos/
 │   ├── pagos/              # modelo de lectura sobre legalizaciones
 │   ├── reportes/           # PDF (plantillas Jinja2)
@@ -118,7 +119,7 @@ backend/tests/              # pruebas por módulo + matriz RBAC
 **Decisiones:**
 - **Sesiones síncronas.** FastAPI ejecuta los endpoints `def` en un pool de hilos. A la carga esperada (decenas de usuarios) async no aporta nada y sí complejidad (lazy loading, drivers, pruebas).
 - **Reglas de negocio solo en `services`.** Los routers no contienen lógica, así que las reglas se prueban sin HTTP.
-- **Máquina de estados explícita** en `legalizaciones/service.py`: una tabla `TRANSICIONES = {(estado_origen, accion): (estado_destino, roles_permitidos, validaciones)}`. Cualquier cambio de estado pasa por una sola función, `transicionar()`, que valida, persiste e inserta el evento de historial en la misma transacción.
+- **Máquina de estados explícita** en `legalizaciones/service.py` con **dos dimensiones** (ADR-021): una tabla `TRANSICIONES = {(dimension, estado_origen, accion): (estado_destino, roles_permitidos, validaciones)}`. La dimensión `OPERATIVO` (`estado`: aprobar, rechazar, devolver) solo admite ADMIN y SUPERADMIN; la `FINANCIERO` (`estado_financiero`) solo FINANCIERO y SUPERADMIN (ADR-025). Cualquier cambio de estado pasa por una sola función, `transicionar()`, que valida (permisos, autoaprobación, comprobantes, coherencia entre dimensiones), persiste e inserta el evento de historial en la misma transacción. `Estado legalizacion` de AppSheet no se modela: es `estado`.
 - **Una única fuente del saldo** (RN-02): la vista SQL `v_legalizacion_saldos` la consumen pagos, el detalle, el PDF y los indicadores.
 - **Configuración por variables de entorno** (12-factor) con `.env.example` versionado. Los secretos nunca se versionan.
 
@@ -127,14 +128,14 @@ backend/tests/              # pruebas por módulo + matriz RBAC
 PostgreSQL 16. El detalle completo está en `docs/database-design.md`. En resumen:
 - **Claves primarias UUID** (`gen_random_uuid()`) más **folio legible** (`LG-000001`) generado desde una secuencia. Los UUID evitan la enumeración de IDs; el folio responde a RN-04.
 - **Dinero en `NUMERIC(14,2)`.**
-- **Enums como `TEXT` + `CHECK`** (en lugar de `CREATE TYPE`), porque son más fáciles de migrar.
+- **Enums del sistema** (rol, estado, estado financiero) como `TEXT` + `CHECK` (en lugar de `CREATE TYPE`), porque son más fáciles de migrar. **Listas de negocio** (proyectos, rubros, células) como tablas maestras administrables (ADR-022).
 - **Eliminación lógica** con `deleted_at`; **auditoría** con `created_at/updated_at/created_by/updated_by`, más las tablas `legalizacion_eventos` y `auditoria`.
 - **RLS como defensa en profundidad** sobre `legalizaciones` y `gastos` (§6).
 - **Migraciones solo con Alembic.** Nunca se cambia el esquema a mano.
 
 ## 5. Flujo de autenticación
 
-Corresponde a DP-01. Este diseño asume Google como método principal y deja la contraseña como opcional.
+**DP-01 ✅ resuelta y definitiva:** Google OAuth es el **único** método de acceso, solo con cuentas de Google Workspace de Trulab. Replica la configuración real de AppSheet: *Require user sign-in* = sí, *Identity Provider* = Google, *Allow all signed-in users* = no.
 
 ```
 Usuario        SPA                         API                              Google
@@ -144,7 +145,8 @@ Usuario        SPA                         API                              Goog
   │           │  POST /api/v1/auth/google {id_token}                           │
   │           │───────────────────────────▶│ verifica firma, aud, exp          │
   │           │                            │ exige email_verified y hd=trulab.co
-  │           │                            │ busca usuario por correo (activo) │
+  │           │                            │ ¿existe en usuarios? ¿activo?     │
+  │           │                            │ ¿tiene rol? (si no → 403)         │
   │           │                            │ emite access JWT (15 min)         │
   │           │                            │ + refresh token (cookie httpOnly) │
   │           │◀── {access_token, usuario} │                                   │
@@ -152,19 +154,30 @@ Usuario        SPA                         API                              Goog
   │           │  si 401 → POST /auth/refresh (cookie) → nuevo access           │
 ```
 
-- **No hay autorregistro:** si el correo no existe en `usuarios` o está inactivo, la respuesta es 403 con el mensaje "Solicite acceso al administrador". Los usuarios los crea ADMIN (equivale al control de dominio de AppSheet).
+- **Validaciones en orden** (RN-12). Todas deben cumplirse:
+  1. Firma, `aud` y `exp` del ID token.
+  2. `email_verified`.
+  3. Dominio de Google Workspace de Trulab (claim `hd`).
+  4. El correo existe en `usuarios`.
+  5. El usuario está `activo`.
+  6. Tiene un rol válido.
+
+  Si falla cualquiera, la respuesta es 403 con el mensaje "Su cuenta no tiene acceso. Contacte al administrador", y se registra `ACCESO_DENEGADO` en `auditoria`.
+- **No hay autorregistro:** los usuarios los crean ADMIN o SUPERADMIN. Equivale a *Allow all signed-in users = no* y a la tabla Usuarios de AppSheet, que ya resolvía los datos con `LOOKUP(USEREMAIL())`.
+- **Sin contraseñas** (RN-15): la app no almacena, crea, recupera, restablece ni cambia credenciales. No existen endpoints ni pantallas para eso. Los problemas de cuenta los atienden los administradores de Google Workspace de Trulab.
 - **Access token:** JWT HS256 con `sub` (id de usuario), `rol` y `exp` de 15 min. Se guarda en memoria en la SPA.
 - **Refresh token:** valor aleatorio opaco que se guarda **hasheado** en la tabla `sesiones` (rotación en cada uso, revocable). Va en una cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`. Vence a los 7 días.
 - **Cierre de sesión:** revoca la sesión y borra la cookie.
 - **Cambio de rol o desactivación:** se revocan las sesiones del usuario. El rol se vuelve a leer de BD en cada petición (no se confía solo en el claim) para que el cambio sea efectivo al instante.
-- **Contraseña** (si DP-01 la aprueba): `POST /auth/login` con bcrypt (coste 12), con límite de intentos (5 por minuto por IP y por correo).
+- **Límite de peticiones** en `/auth/google` (10 por minuto por IP) contra el abuso del endpoint.
+- **Login de desarrollo:** solo con `ENV=local`, para trabajar mientras llega el OAuth Client ID (riesgo R1.1 de `SPRINTS.md`). Una prueba en CI verifica que está desactivado fuera de local.
 
 ## 6. Flujo de autorización (RBAC)
 
 La autorización tiene tres capas; las dos primeras son obligatorias:
 
 1. **Permiso por endpoint:** la dependencia `require_permission(Permiso.PAGOS_LEER)` en el router. La matriz `ROL → {permisos}` vive en `core/permissions.py` y se deriva de `SPEC.md` §6.
-2. **Alcance por recurso** (en el service): para un VIAJERO, toda consulta de legalizaciones o gastos se filtra por `usuario_id = actual`. Un recurso ajeno responde **404, no 403**, para no revelar que existe. Además se valida el **estado** (por ejemplo, editar solo en `BORRADOR` o `DEVUELTA`).
+2. **Alcance por recurso** (en el service): para un VIAJERO, toda consulta de legalizaciones o gastos se filtra por `usuario_id = actual`. Un recurso ajeno responde **404, no 403**, para no revelar que existe. Además se valida el **estado** (por ejemplo, el dueño edita solo con `estado = PENDIENTE`) y la **separación de funciones** (ADMIN no toca la dimensión financiera, FINANCIERO no toca la operativa y nadie cambia el estado de lo propio salvo SUPERADMIN).
 3. **RLS en PostgreSQL** (defensa en profundidad): en cada transacción, `SET LOCAL app.usuario_id = …` y `SET LOCAL app.rol = …`. Las políticas replican RN-01. Así, un bug en un service no puede filtrar datos ajenos. La aplicación se conecta con un rol **sin** `BYPASSRLS` y que no es dueño de las tablas.
 
 **Por qué no solo RLS:** las reglas de estado, las transiciones y los mensajes de error claros pertenecen a la aplicación. RLS solo garantiza el aislamiento de filas.
@@ -176,24 +189,29 @@ La autorización tiene tres capas; las dos primeras son obligatorias:
 ## 7. Gestión de archivos (soportes)
 
 - **Subida a través de la API** (multipart), no directa al bucket. A este volumen simplifica la validación; si el volumen crece, se pasa a URLs firmadas de subida (ADR futuro).
-- **Validación:** tamaño ≤ 10 MB; tipo real por *magic bytes* (JPG, PNG, WEBP, HEIC, PDF); rechazo de SVG y HTML. HEIC se convierte a JPEG en el servidor (pillow-heif) para que se vea en cualquier navegador y en el PDF.
-- **Clave del objeto:** `soportes/{legalizacion_id}/{gasto_id}/{uuid}.{ext}`. El nombre original solo se guarda como metadato.
+- **Dos adjuntos tipados por gasto** (ADR-023): `soporte` = imagen (JPG, PNG, WEBP, HEIC) y `archivo` = PDF. Al menos uno es necesario para aprobar y liquidar (RN-21), no para guardar el gasto.
+- **Validación:** tamaño ≤ 10 MB; tipo real por *magic bytes*, comprobando que coincida con el campo (imagen en `soporte`, PDF en `archivo`); rechazo de SVG y HTML. HEIC se convierte a JPEG en el servidor (pillow-heif) para que se vea en cualquier navegador y en el PDF.
+- **Clave del objeto:** `gastos/{legalizacion_id}/{gasto_id}/{soporte|archivo}/{uuid}.{ext}`. El nombre original solo se guarda como metadato.
 - **Bucket privado.** Para ver un soporte, la API verifica el permiso y responde con una **URL firmada de 5 minutos** (o hace streaming en local).
 - **Interfaz `Storage`** con implementaciones `LocalStorage` (desarrollo) y `S3Storage`/`GCSStorage` (producción), elegida por configuración (DP-05).
 - Eliminar un gasto **no** borra el objeto en el MVP (soft delete). Una limpieza programada queda para el futuro.
 
 ## 8. Generación de PDFs
 
-- **WeasyPrint + plantilla HTML/Jinja2** (`templates/pdf/legalizacion.html`) con CSS de impresión. El contenido incluye encabezado corporativo, folio, viajero, cargo, proyecto, fechas, motivo, tabla de gastos, totales y saldo, historial de estados y miniaturas de los soportes de imagen.
+- **WeasyPrint + plantilla HTML/Jinja2** (`templates/pdf/legalizacion.html`) con CSS de impresión. El contenido incluye encabezado corporativo, folio, colaborador (nombre, cargo, célula), motivo, fecha de legalización, tabla de gastos (fecha de factura, rubro, proyecto, concepto, valor), totales y saldo, estado operativo y financiero, historial y miniaturas de los soportes de imagen.
 - **Por qué WeasyPrint y no ReportLab:** la plantilla es HTML y CSS, la misma habilidad que el resto del proyecto, y el diseño se ajusta sin reescribir código de dibujo.
 - **Riesgo:** WeasyPrint necesita Pango/GTK, que es incómodo en Windows. **Mitigación:** el backend siempre corre en Docker (Linux), también en desarrollo.
 - **Generación bajo demanda** (`GET /legalizaciones/{id}/pdf`) y síncrona. Con menos de 50 gastos por legalización el tiempo esperado es inferior a 3 s.
-- **Futuro:** guardar una copia inmutable del PDF al pasar a `PAGADA`, como evidencia contable.
+- **Futuro:** guardar una copia inmutable del PDF cuando el estado financiero pasa a `PROCESADO`, como evidencia contable.
 
 ## 9. Dashboard
 
-- Endpoints de agregación dedicados (`/indicadores/...`) con `GROUP BY` sobre `v_legalizacion_saldos`. El frontend nunca descarga datos crudos para agregarlos.
-- Filtros por rango de fechas (de `fecha_inicio`) y por proyecto.
+- Endpoints de agregación dedicados (`/indicadores/...`). El frontend nunca descarga datos crudos para agregarlos.
+  - El **consumo por proyecto** agrupa `gastos` por `gastos.proyecto` (DP-02 ✅: el proyecto vive en el gasto, así que una legalización puede aportar a varios proyectos).
+  - La **distribución por estado** agrupa `legalizaciones` por estado operativo (`estado`, que es también el `Estado legalizacion` de AppSheet; DP-13 ✅).
+- **Filtro temporal = Segmentador** (DP-02 ✅, ADR-018): el usuario elige inicio y fin, y se envían como parámetros `desde`/`hasta`. No hay tabla. El último rango usado se recuerda en el navegador por comodidad.
+- **Fecha de análisis = `gastos.fecha_factura`** (DP-16 ✅, ADR-024): todo indicador aplica `fecha_factura BETWEEN desde AND hasta`. `fecha_legalizacion` no se usa como fecha principal de análisis.
+- Filtro opcional adicional por proyecto.
 - **MVP:** (a) total gastado por proyecto, en barras; (b) número de legalizaciones por estado, en dona. Las tarjetas KPI (total transferido, total gastado, saldo pendiente por pagar) son opcionales si hay tiempo.
 - No se necesita caché a este volumen; si llega a necesitarse, se usa una vista materializada.
 
@@ -207,7 +225,7 @@ La autorización tiene tres capas; las dos primeras son obligatorias:
 
 | Integración | Diseño previsto |
 | :--- | :--- |
-| Correo (DP-06) | Módulo `notificaciones` con una interfaz `Notifier` (SMTP o Gmail API) llamada desde `transicionar()`. En el MVP el envío es síncrono, tolerante a fallos y registrado en el log; luego se pasa a una cola. |
+| Correo (DP-06) | Módulo `notificaciones` con una interfaz `Notifier` (SMTP o Gmail API) llamada desde `transicionar()` (aprobar, devolver, rechazar, pagado). En el MVP el envío es síncrono, tolerante a fallos y registrado en el log; luego se pasa a una cola. |
 | Google Chat | Webhooks entrantes por espacio para avisos; una Chat App con comandos `/` (consultar estado por folio) sobre los mismos endpoints. |
 | Excel/CSV | Endpoint `GET /pagos/export?formato=xlsx` con openpyxl. |
 | ERP/contabilidad | Fuera de alcance; el folio y las tablas de eventos facilitan una futura exportación. |
@@ -229,7 +247,7 @@ Formato: **ID · Decisión · Estado · Motivo**. Estados posibles: *Aceptada*, 
 | ADR-003 | FastAPI + SQLAlchemy 2 síncrono + Alembic | Aceptada | Exigido por el informe; la versión síncrona es más simple al volumen esperado |
 | ADR-004 | PostgreSQL 16 | Aceptada | El informe pide 15+; la 16 es estable y está soportada por los proveedores gestionados |
 | ADR-005 | Sesión propia: access JWT de 15 min en memoria + refresh opaco rotativo en cookie httpOnly | Aceptada | Evita tokens en `localStorage` (XSS) y permite revocar |
-| ADR-006 | Google Identity como login principal; sin autorregistro | Propuesta (DP-01) | Continuidad con AppSheet; sin contraseñas que gestionar |
+| ADR-006 | **Google Workspace de Trulab como único método de acceso**; acceso solo para usuarios registrados, activos y con rol; sin autorregistro ni gestión de contraseñas | **Aceptada (DP-01 ✅, definitiva)** | Replica la seguridad real de AppSheet (*Require sign-in*, proveedor Google, *Allow all signed-in users* = no). Las credenciales quedan en Google Workspace |
 | ADR-007 | Autorización en el service + RLS en PostgreSQL como defensa en profundidad | Aceptada | RNF-02, aislamiento de la regla RN-01 |
 | ADR-008 | Saldo calculado en la vista `v_legalizacion_saldos`, nunca almacenado | Aceptada | Una sola fuente de verdad, sin inconsistencias |
 | ADR-009 | Archivos en bucket privado, servidos con URLs firmadas de corta duración | Aceptada | Los soportes contienen datos personales y financieros |
@@ -238,5 +256,14 @@ Formato: **ID · Decisión · Estado · Motivo**. Estados posibles: *Aceptada*, 
 | ADR-012 | Dinero en `NUMERIC(14,2)` / `Decimal`; en JSON se envía como string | Aceptada | Exactitud; evita errores de flotante en JS |
 | ADR-013 | Eliminación lógica (`deleted_at`) en entidades operativas | Aceptada | Trazabilidad contable (RN-09) |
 | ADR-014 | Errores en formato RFC 9457 (`application/problem+json`) | Aceptada | Estándar, fácil de mapear a mensajes de UI |
-| ADR-015 | Máquina de estados centralizada con historial en la misma transacción | Aceptada | RN-05 y RN-10 garantizadas en un solo lugar |
+| ADR-015 | Máquina de estados centralizada con historial en la misma transacción | Aceptada | RN-05 y RN-10 garantizadas en un solo lugar. El contenido de la máquina lo define ADR-021 |
 | ADR-016 | Backend siempre en Docker, incluso en desarrollo | Propuesta | Paridad con producción y dependencias nativas de WeasyPrint |
+| ADR-017 | **El proyecto es una lista cerrada en cada gasto** (no en la legalización); no se acepta texto libre. Lo mismo para `rubro` y `celula` | **Aceptada (DP-02 ✅, definitiva).** El *mecanismo* original (listas en `core/catalogos.py` + `CHECK`, sin tabla) queda **reemplazado por ADR-022** (DP-14 ✅) | Replica fielmente AppSheet (`Registro_Gastos.Proyecto` es un enum) |
+| ADR-018 | **Segmentador no se migra**: el filtro temporal del dashboard se implementa como parámetros `desde`/`hasta` | **Aceptada (DP-02 ✅, definitiva)** | En AppSheet era una tabla auxiliar solo para filtrar por fechas; en una SPA eso es estado de la vista, no una entidad |
+| ADR-019 | **`valor_transferido` es una columna generada**: `CASE WHEN recursos_propios THEN 0 ELSE valor_asignado END`. Solo FINANCIERO (y SUPERADMIN) escribe `valor_asignado`; `recursos_propios` lo marca el viajero al crear | **Aceptada (DP-04 ✅, DP-17 ✅, definitiva)** | Regla real de AppSheet `IF([Recursos propios]=TRUE,0,[Valor_T])`. Calcularla en la BD impide valores inconsistentes |
+| ADR-020 | **Modelo de datos alineado con la estructura real de AppSheet**, con instantánea de los datos del colaborador (`colaborador_nombre/cargo/cedula/celula`) en la legalización al crearla | **Aceptada (DP-07 ✅)**; la instantánea es *Propuesta* | AppSheet copia esos datos con `LOOKUP(USEREMAIL())`. La instantánea conserva el cargo y la célula históricos aunque el usuario cambie |
+| ADR-021 | **Dos dimensiones de estado**: `estado` (operativo: `PENDIENTE`, `APROBADO`, `RECHAZADO`) y `estado_financiero` (`PENDIENTE`, `TRANSFERIDO`, `PAGADO`, `PROCESADO`), ambas `TEXT` + `CHECK` e iniciadas en `PENDIENTE` por el sistema. `Estado legalizacion` no se almacena (espejo de `estado`). *Devolver* regresa a `PENDIENTE` con comentario y `devuelta_at`; `DEVUELTO` y `CANCELADO` quedan como extensión futura. `PAGADO`/`PROCESADO` exigen `APROBADO` (`CHECK` de coherencia) | **Aceptada (DP-13 ✅, definitiva)**; los detalles S-01, S-03 y S-08 son *Propuesta* | Replica los enums reales de AppSheet sin inventar valores; dos columnas evitan estados combinados ambiguos |
+| ADR-022 | **Catálogos como tablas maestras** `proyectos`, `rubros` y `celulas` (`nombre`, `activo`, `orden`), referenciadas por FK desde `gastos` y `usuarios`, administradas solo por SUPERADMIN. Se desactivan, no se eliminan. Valores iniciales desde la exportación de AppSheet | **Aceptada (DP-14 ✅, confirmada definitivamente por el negocio el 2026-11-11)**; reemplaza el mecanismo de ADR-017 | Evita valores escritos en el código; permite agregar proyectos, rubros y células sin desplegar; consistencia de datos y mejores reportes. **Sin cambio funcional para el usuario** (sigue eligiendo de una lista desplegable); el cambio es interno: texto/enum → referencia a tabla maestra |
+| ADR-023 | **Dos adjuntos tipados por gasto**: `soporte_id` (imagen) y `archivo_id` (PDF); se exige al menos uno para aprobar y liquidar, no para guardar | **Aceptada (DP-15 ✅, definitiva)**; guardar sin comprobante es *Propuesta* (S-04) | Replica `Soporte`/`Archivo` de AppSheet y permite capturar en campo con conexión inestable |
+| ADR-024 | **Indicadores sobre `gastos.fecha_factura`** con `BETWEEN desde AND hasta`; `fecha_legalizacion` solo para listas operativas | **Aceptada (DP-16 ✅, definitiva)** | Es la fecha real del consumo y la correcta para el análisis fiscal |
+| ADR-025 | **Separación de funciones ADMIN / FINANCIERO**: ADMIN = operación interna (estado operativo, revisión de comprobantes); FINANCIERO = tesorería (valor transferido, estado financiero, pagos, liquidación). Sin autoaprobación salvo SUPERADMIN (RN-27): nadie aprueba, valida financieramente ni paga lo propio | **Aceptada (DP-18 ✅ y RN-27 ✅, definitivas)** | Control interno: quien aprueba no paga y quien paga no aprueba |

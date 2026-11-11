@@ -4,6 +4,7 @@
 > Las estimaciones van en horas (h). Si una semana supera su capacidad, se aplica el recorte de `ROADMAP.md` (contingencia).
 > Las skills se nombran como se invocan en Claude Code (detalle en `docs/skills-strategy.md`).
 > **Regla de puerta:** no se empieza la semana siguiente sin cumplir su *Gate de salida*. Si falta algo, se termina primero o se recorta de forma explícita (registrándolo en `HANDOFF.md`).
+> **Terminología (DP-13 ✅, 2026-11-11).** Las tareas y estimaciones de este plan **no cambiaron**; sus nombres de acciones vienen de la máquina provisional y se leen así: *legalizar* → **aprobar** (ADMIN); *devolver* → **devolver** (ADMIN, regresa a `PENDIENTE`) y además **rechazar** (ADMIN); *pagar* → **cambiar estado financiero** a `TRANSFERIDO`/`PAGADO`/`PROCESADO` (FINANCIERO); `BORRADOR`/`DEVUELTA` (editable) → `PENDIENTE`; `LEGALIZADA` → `APROBADO`; `PAGADA` → `estado_financiero` `PAGADO`/`PROCESADO`; "listas cerradas" → **tablas de catálogo** (DP-14 ✅); "soporte obligatorio" → **soporte o archivo** (DP-15 ✅). Detalle en `SPEC.md` §17.1 y `docs/user-flows.md`.
 
 ---
 
@@ -11,8 +12,8 @@
 
 | # | Tarea | Responsable |
 | :- | :--- | :--- |
-| P-1 | Responder las decisiones abiertas DP-01 a DP-12 (`SPEC.md` §17), o aceptar las recomendaciones por defecto | Dueño del producto |
-| P-2 | Exportar desde AppSheet las 5 tablas en CSV y los soportes (imágenes y PDF), y confirmar dónde se guardan (DP-07) | Dueño del producto / admin AppSheet |
+| P-1 | ✅ DP-01, DP-02, DP-04 y DP-07 resueltas (2026-11-10); ✅ DP-13 a DP-18 resueltas (2026-11-11). **No quedan decisiones bloqueantes** (`SPEC.md` §17.1) | Dueño del producto |
+| P-2 | Exportar desde AppSheet los **datos** de las 5 tablas en CSV y los soportes (imágenes y PDF), y confirmar dónde se guardan. La estructura ya está validada (DP-07 ✅) | Dueño del producto / admin AppSheet |
 | P-3 | Crear el proyecto en Google Cloud Console y el **OAuth Client ID** (web) con los orígenes local y de producción | Admin de Google Workspace |
 | P-4 | Entregar el logo y la paleta corporativa (DP-08) | Comunicaciones |
 | P-5 | Instalar Docker Desktop, Node 20 LTS, Python 3.12 y el CLI `gh` en el equipo de desarrollo | Desarrollador |
@@ -64,11 +65,11 @@
 
 | ID | Tarea | Est. | Depende de | Skills recomendadas |
 | :- | :--- | :-: | :- | :--- |
-| S2-01 | Validar el modelo contra la exportación de AppSheet (DP-07) y ajustar `docs/database-design.md` si hace falta | 2 h | P-2 | `agent-skills:spec-driven-development`, `agent-skills:documentation-and-adrs` |
-| S2-02 | Migración `proyectos`, `legalizaciones`, `legalizacion_eventos`, `archivos`, `gastos`; secuencias de folio; vista `v_legalizacion_saldos` | 3 h | S2-01 | `engineering:system-design` |
+| S2-01 | Incorporar las respuestas de DP-13 a DP-17 al modelo (estructura base ya validada, DP-07 ✅) y ajustar `docs/database-design.md` | 2 h | P-2 | `agent-skills:spec-driven-development`, `agent-skills:documentation-and-adrs` |
+| S2-02 | Migración `legalizaciones` (con `valor_transferido` generado), `legalizacion_eventos`, `archivos`, `gastos` (con `rubro` y `proyecto` como listas cerradas); secuencias de folio; vista `v_legalizacion_saldos` | 3 h | S2-01 | `engineering:system-design` |
 | S2-03 | RLS sobre `legalizaciones` y `gastos` + `SET LOCAL` por transacción + prueba de aislamiento con `trulab_app` | 3 h | S2-02 | `agent-skills:security-and-hardening`, `agent-skills:test-driven-development` |
 | S2-04 | Service de legalizaciones: CRUD, alcance por dueño (404 si es ajena), máquina de estados `transicionar()` (legalizar y devolver), historial; pruebas de RN-05, RN-06, RN-07, RN-09 y RN-10 | 5 h | S2-03 | `agent-skills:test-driven-development`, `engineering:system-design` |
-| S2-05 | API de legalizaciones y proyectos (lista con filtros y paginación, detalle con `acciones_permitidas` y saldo) | 3 h | S2-04 | `agent-skills:api-and-interface-design` |
+| S2-05 | API de legalizaciones y catálogos (lista con filtros y paginación, detalle con `acciones_permitidas` y saldo, `GET /catalogos`) | 3 h | S2-04 | `agent-skills:api-and-interface-design` |
 | S2-06 | `core/storage.py` (Local + S3/GCS), validación por magic bytes, conversión HEIC, URL firmada | 3 h | S1-03 | `agent-skills:security-and-hardening` |
 | S2-07 | Service y API de gastos (multipart, reemplazar y ver soporte, eliminación lógica); pruebas de RN-08 y RN-13 | 4 h | S2-04, S2-06 | `agent-skills:test-driven-development` |
 | S2-08 | Generar tipos TS desde OpenAPI e integrarlos en `apiClient` | 1 h | S2-05, S2-07 | `agent-skills:api-and-interface-design` |
@@ -83,7 +84,7 @@
 - **R2.1** El esquema real de AppSheet difiere del informe. *Mitigación:* S2-01 va primero; los cambios se reflejan en la migración antes de construir encima.
 - **R2.2** La cámara y HEIC en iOS Safari se comportan distinto. *Mitigación:* probar en un dispositivo real temprano (S2-12) y convertir en el servidor.
 - **R2.3** La complejidad de RLS con SQLAlchemy (el `SET LOCAL` debe ir en cada transacción). *Mitigación:* centralizarlo en la dependencia `get_db`; si se atasca más de 3 h, aplicar la contingencia 5 del roadmap.
-- **R2.4** DP-02 o DP-04 sin respuesta. *Mitigación:* aplicar la recomendación por defecto y registrar el ADR.
+- **R2.4** ~~DP-13 a DP-17 sin respuesta al inicio de la semana 2~~ → **cerrado ✅**: todas resueltas el 2026-11-11. Riesgo residual: validar los supuestos S-01 a S-08 (`SPEC.md` §17.3) en la demo de la semana 2.
 
 **Entregables:** módulo de legalizaciones y gastos operativo; flujo del viajero completo desde móvil.
 
@@ -183,7 +184,7 @@
 | 4 | 30 h | 30 h | 0 |
 
 **Lectura honesta:** el plan de 4 semanas del informe es **ajustado**, con un déficit de unas 20 h en las semanas 1 y 2. Opciones:
-1. Aplicar la contingencia del roadmap (recortar KPIs, login con contraseña y miniaturas del PDF), que ahorra unas 8 h.
+1. Aplicar la contingencia del roadmap (recortar KPIs y miniaturas del PDF; el login con contraseña ya quedó fuera por DP-01 ✅).
 2. Usar intensamente la generación de código asistida (Claude) en CRUD y UI repetitiva.
 3. Pactar desde ya una semana 5 de holgura para UAT y corte.
 

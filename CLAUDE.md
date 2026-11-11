@@ -45,18 +45,37 @@ frontend/src/{app,components/{ui,layout},features/<dominio>,lib,types}
 infra/  scripts/etl_appsheet/  docs/
 ```
 
-Dominios: `auth`, `usuarios`, `cargos`, `proyectos`, `legalizaciones`, `gastos`, `pagos`, `reportes`, `indicadores`.
+Dominios: `auth`, `usuarios`, `cargos`, `catalogos` (tablas maestras proyectos, rubros y células; las administra SUPERADMIN), `legalizaciones`, `gastos`, `pagos`, `reportes`, `indicadores`.
 
 ## Roles y módulos
 
-- **Roles** (uno por usuario): `VIAJERO` (solo lo suyo), `FINANCIERO` (audita y paga; ve todo), `ADMIN` (además gestiona usuarios y cargos), `SUPERADMIN` (todo). Matriz completa en `SPEC.md` §6.
-- **Módulos MVP:** Auth, Usuarios, Cargos, Legalizaciones, Gastos, Pagos, PDF, Indicadores. Las notificaciones son opcionales. OCR y Google Chat quedan para el futuro.
-- **Estados:** `BORRADOR → LEGALIZADA → PAGADA`, con `LEGALIZADA ⇄ DEVUELTA`.
+- **Roles** (uno por usuario): `VIAJERO` (solo lo suyo), `ADMIN` (operación interna: aprueba, rechaza y devuelve; gestiona usuarios y cargos; **no** toca dinero), `FINANCIERO` (tesorería: valor transferido, estado financiero, pagos y liquidación; ve todo), `SUPERADMIN` (todo, incluidos los catálogos). Matriz completa en `SPEC.md` §6.
+- **Módulos MVP:** Auth, Usuarios, Cargos, Catálogos, Legalizaciones, Gastos, Pagos, PDF, Indicadores. Las notificaciones son opcionales. OCR y Google Chat quedan para el futuro.
+- **Estados (DP-13 ✅):** dos dimensiones independientes. `estado` (operativo, AppSheet `Estado`): `PENDIENTE → APROBADO | RECHAZADO`; *devolver* regresa a `PENDIENTE` con comentario; lo cambia solo ADMIN/SUPERADMIN. `estado_financiero` (AppSheet `Estado_P`): `PENDIENTE`, `TRANSFERIDO`, `PAGADO`, `PROCESADO`; lo cambia solo FINANCIERO/SUPERADMIN; `PAGADO`/`PROCESADO` exigen `APROBADO`. `Estado legalizacion` = `[Estado]`, no se almacena.
+
+## Decisiones DEFINITIVAS (resueltas el 2026-11-10 y el 2026-11-11; no reabrir)
+
+Se confirmaron contra la configuración y la estructura real de AppSheet. Solo cambian si el dueño del producto lo decide de forma explícita, y en ese caso se registra un ADR nuevo. Detalle en `SPEC.md` §17.1.
+
+- **DP-01 ✅ Acceso:** solo **Google OAuth con cuentas de Google Workspace de Trulab**. Además, el correo debe existir en Usuarios, estar activo y tener rol; si no, el acceso se deniega. **No hay** registro público, contraseñas, recuperación, restablecimiento ni cambio de contraseña. Las credenciales las gestiona Google Workspace (ADR-006).
+- **DP-02 ✅ Proyectos:** `Proyecto` es una **lista cerrada en cada gasto** (`Registro_Gastos`), no en la legalización; el mecanismo (tabla maestra) lo fija DP-14. `Segmentador` **no** son proyectos: es solo el filtro de fechas del dashboard y se reemplaza por `desde`/`hasta` (ADR-017, ADR-018).
+- **DP-04 ✅ Valor transferido:** solo **FINANCIERO** lo registra y modifica (SUPERADMIN, para soporte); ADMIN y VIAJERO no. `valor_transferido = recursos_propios ? 0 : valor_asignado (Valor_T)`, calculado y nunca escrito a mano (ADR-019).
+- **DP-07 ✅ Estructura real:** las 5 tablas están validadas (`SPEC.md` §18). Los datos del colaborador vienen del usuario autenticado (`LOOKUP(USEREMAIL())`). Hay rubro, CC/NIT, empresa, dos adjuntos y fecha de factura en el gasto, y una sola fecha de legalización en la cabecera (ADR-020).
+
+- **DP-13 ✅ Estados:** `Estado` = Pendiente ⛔ / Aprobado / Rechazado (ADMIN aprueba, rechaza, devuelve); `Estado_P` = Pendiente⌛ / Pagado / Transferido / Procesado (solo FINANCIERO y SUPERADMIN); `Estado legalizacion` = espejo de `Estado`. `Devuelto` y `Cancelado` son extensión futura (ADR-021).
+- **DP-14 ✅ Catálogos:** proyectos, rubros y células **no se escriben en el código**: tablas maestras administradas por SUPERADMIN, que se desactivan y no se borran. `Rol` sigue como enum fijo. Para el usuario no cambia nada (lista desplegable); internamente se guarda la referencia a la tabla, no el texto (ADR-022).
+- **RN-27 ✅ Sin autoaprobación (definitiva):** nadie aprueba, valida financieramente ni paga una legalización creada por sí mismo; solo SUPERADMIN, con auditoría (ADR-025).
+- **DP-15 ✅ Adjuntos:** `soporte` = imagen, `archivo` = PDF; **al menos uno** por gasto para aprobar y liquidar (ADR-023).
+- **DP-16 ✅ Fechas:** indicadores siempre sobre `gastos.fecha_factura BETWEEN desde AND hasta`; no hay fechas de viaje (ADR-024).
+- **DP-17 ✅ Recursos propios:** lo marca el VIAJERO al crear; transferido = 0 y la empresa reembolsa (ADR-019).
+- **DP-18 ✅ ADMIN:** operación interna; no registra valor transferido, no cambia `Estado_P`, no paga ni liquida. Separación de funciones con FINANCIERO (ADR-025).
+
+**No quedan decisiones bloqueantes.** Siguen abiertas, sin bloquear: DP-05 hosting (gate al cerrar la semana 2), DP-06 correos, DP-08 marca, DP-09 folios, DP-10 qué se registra al pagar, DP-12 (recomendación: financiero no edita gastos). Los supuestos de detalle S-01 a S-08 (`SPEC.md` §17.3) se validan en la demo de la semana 2.
 
 ## Decisiones clave (ver ADR en `docs/architecture.md` §13)
 
-1. Las transiciones de estado son **acciones** (`POST /legalizaciones/{id}/legalizar|devolver|pagar`) que pasan por una única función `transicionar()`, la cual registra el historial en la misma transacción.
-2. **El saldo nunca se almacena:** sale de la vista `v_legalizacion_saldos` (`valor_transferido − Σ gastos`).
+1. Las transiciones de estado son **acciones** (`POST /legalizaciones/{id}/aprobar|rechazar|devolver` para ADMIN y `POST /legalizaciones/{id}/estado-financiero` para FINANCIERO) que pasan por una única función `transicionar()`, la cual registra el historial en la misma transacción.
+2. **El saldo nunca se almacena:** sale de la vista `v_legalizacion_saldos` (`valor_transferido − Σ gastos`). `valor_transferido` es una columna generada a partir de `recursos_propios` y `valor_asignado`.
 3. **Recurso ajeno → 404**, sin permiso → 403, estado inválido → 409. Los errores siguen RFC 9457 con `code` estable.
 4. **Dinero:** `NUMERIC(14,2)` en BD y *string* en JSON. Moneda COP.
 5. **PK UUID** más folio legible (`LG-000001`, `CA-000001`).
@@ -77,7 +96,7 @@ Dominios: `auth`, `usuarios`, `cargos`, `proyectos`, `legalizaciones`, `gastos`,
 
 ## Estado actual
 
-**Fase:** planificación terminada (documentación base creada el 2026-11-10). **No hay código.** Siguiente paso: semana 0 (respuestas a las DP y exportación de AppSheet) y luego la semana 1 (`SPRINTS.md`). El detalle vivo está en `HANDOFF.md`.
+**Fase:** documentación base terminada y **todas las decisiones bloqueantes resueltas** (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **No hay código.** El proyecto está **listo para iniciar oficialmente el Sprint 1** (`SPRINTS.md`, semana 1). **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
 
 ## Cómo retomar
 

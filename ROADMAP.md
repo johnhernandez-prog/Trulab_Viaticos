@@ -18,9 +18,9 @@ técnica      Cargos                                      ETL de migración (pre
 | Fase | Nombre | Objetivo | Depende de | Semana | Módulos / RF |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | F1 | Arquitectura y base técnica | Monorepo, Docker Compose, backend y frontend esqueleto, CI, BD con Alembic, convenciones | — | 1 | — |
-| F2 | Autenticación y seguridad | Login Google, sesión JWT y refresh, `/me`, matriz RBAC, roles de BD y RLS base, errores RFC 9457 | F1 | 1 | M1 · RF-001/002/014 |
+| F2 | Autenticación y seguridad | Login exclusivo con Google Workspace + validación contra Usuarios (DP-01 ✅), sesión JWT y refresh, `/me`, matriz RBAC, roles de BD y RLS base, errores RFC 9457 | F1 | 1 | M1 · RF-001/014 |
 | F3 | Usuarios y cargos | CRUD de cargos y usuarios (API y UI), AppShell responsivo con navegación por rol | F2 | 1 | M2, M3 · RF-003/004 |
-| F4 | Legalizaciones | Modelo, CRUD, proyectos (DP-02), máquina de estados (legalizar y devolver), historial, lista y detalle | F3 | 2 | M4 · RF-005/007 |
+| F4 | Legalizaciones | Modelo, CRUD, catálogos cerrados (proyecto, rubro; DP-02 ✅), recursos propios y valor transferido (DP-04 ✅), máquina de estados (DP-13 ✅), historial, lista y detalle | F3 | 2 | M4 · RF-005/007/015 |
 | F5 | Registro de gastos | CRUD de gastos, almacenamiento de soportes, cámara, URLs firmadas, totales y saldo | F4 | 2 | M5 · RF-006/011 |
 | F6 | Pagos | Vista de saldos, filtros y resumen, editar valor transferido, acción pagar | F5 | 3 | M6 · RF-007/008 |
 | F7 | Reportes PDF | Plantilla WeasyPrint y descarga | F5 (datos), F6 (estado pagada) | 3 | M7 · RF-009 |
@@ -32,8 +32,9 @@ técnica      Cargos                                      ETL de migración (pre
 
 1. **F2 antes que todo lo funcional:** sin auth ni RBAC no se pueden probar los permisos de ningún módulo.
 2. **F4 → F5 → F6:** los gastos cuelgan de la legalización; el saldo de Pagos necesita los gastos.
-3. **DP-07 (exportación real de AppSheet) antes de cerrar el modelo de F4.** Si el esquema real difiere, se ajusta la migración de F4, no después del ETL.
-4. **DP-02 (proyectos) antes de F4.** Afecta al formulario de legalización y a F8.
+3. ~~DP-07 antes de F4~~ → **resuelta ✅**: estructura real validada (`SPEC.md` §18). Sigue haciendo falta la **exportación de datos** (P-2) para el ETL.
+4. ~~DP-02 antes de F4~~ → **resuelta ✅**: proyecto como lista cerrada en el gasto; Segmentador = filtro de fechas.
+4b. ~~DP-13 a DP-18 antes de la migración de F4~~ → **resueltas ✅ (2026-11-11)**: estados operativo y financiero, catálogos administrables, soporte/archivo, fecha de factura para indicadores, recursos propios del viajero y permisos de ADMIN (`SPEC.md` §17.1). Ya no hay decisiones que bloqueen F4.
 5. **DP-05 (hosting) antes de cerrar la semana 2** (gate de `SPRINTS.md`): hacen falta las credenciales del bucket para probar F5 en un entorno real y preparar F10.
 6. **El ETL (F10) depende de F4 y F5 terminados** (las tablas destino estables) y se ensaya contra la BD de *staging* en la semana 3.
 
@@ -64,7 +65,7 @@ técnica      Cargos                                      ETL de migración (pre
 Se recorta en este orden, sin tocar el flujo crítico (F2, F4, F5, F6):
 1. KPIs del dashboard (quedan solo los dos gráficos).
 2. Miniaturas de soportes en el PDF (queda la lista de gastos).
-3. Login con contraseña (solo Google).
+3. ~~Login con contraseña~~: ya no aplica (DP-01 ✅, solo Google desde el diseño).
 4. Dashboard completo (pasa a post-MVP; financiero usa los filtros de Pagos).
 5. RLS en BD (se mantiene la autorización en la app, con pruebas exhaustivas; RLS en la primera semana post-MVP).
 

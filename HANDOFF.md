@@ -7,88 +7,125 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| Fase | **Hito 0 alcanzado: documentación base completada.** Siguiente: resolver las decisiones abiertas (semana 0) |
-| Semana del sprint | El Sprint 1 aún no inicia. **No se inicia hasta resolver las decisiones abiertas** |
-| Código | No existe todavía (decisión explícita: primero documentación) |
-| Repositorio | Git local con `origin` = `https://github.com/johnhernandez-prog/Trulab_Viaticos.git`. Primer commit local con la documentación base (sin push) |
-| Última actualización | 2026-11-10 |
+| Fase | **Todas las decisiones bloqueantes RESUELTAS. Documentación congelada. El proyecto está listo para iniciar oficialmente el Sprint 1** (semana 1 de `SPRINTS.md`) |
+| Semana del sprint | Sprint 1 listo para comenzar; nada bloquea las semanas 1 ni 2 |
+| Código | No existe todavía |
+| Repositorio | Git local, rama **`main`** (renombrada desde `master`). `origin` = `https://github.com/johnhernandez-prog/Trulab_Viaticos.git` (**sin push todavía**). Commits: `7db3188` (hito 0) y el commit de cierre de documentación "docs: finalize requirements, business rules and project decisions" |
+| Última actualización | 2026-11-11 |
 
 ## Última actividad
 
-Se analizó el *INFORME FINAL PARA PROYECTO TRULAB.md*, se generó la documentación base, se revisaron las referencias cruzadas y se registró como primer hito oficial en un commit (`docs: initialize project specification, architecture, roadmap and project memory`). El informe original no se guardó en el repositorio.
+Se incorporó a toda la documentación el **análisis funcional definitivo de la app AppSheet original**: DP-13 (estados), DP-14 (catálogos), DP-15 (adjuntos), DP-16 (fecha de análisis), DP-17 (recursos propios) y DP-18 (permisos de ADMIN). Junto con DP-01, DP-02, DP-04 y DP-07 (sesión anterior), quedan **RESUELTAS y definitivas**. DP-03 quedó absorbida por DP-13. Tras la validación con el negocio se confirmaron definitivamente **RN-27** (sin autoaprobación; antes era el supuesto S-06) y **DP-14** (tablas maestras, sin cambio funcional para el usuario). La documentación queda **congelada** como baseline y con commit en `main`. No se modificaron tareas, fases, estimaciones ni calendario.
 
 ## Trabajo completado
 
-- [x] Repositorio git local con identidad corporativa y remote configurados
-- [x] `SPEC.md`: especificación maestra con RN, RF, RNF, RBAC, MVP y decisiones abiertas
-- [x] `CLAUDE.md`: memoria del proyecto
-- [x] `ROADMAP.md`: fases F1–F10, dependencias, hitos y contingencia
-- [x] `SPRINTS.md`: plan de 4 semanas con tareas, estimaciones, riesgos, criterios y gates
-- [x] `docs/architecture.md`, con 16 ADR
-- [x] `docs/database-design.md`
-- [x] `docs/api-design.md`
-- [x] `docs/design-system.md`
-- [x] `docs/user-flows.md`
-- [x] `docs/skills-strategy.md`
-- [x] Revisión de consistencia y referencias cruzadas entre documentos
-- [x] Commit local del hito 0 (documentación base)
+- [x] Hito 0: documentación base (commit `7db3188`)
+- [x] **DP-01 ✅** Acceso solo con Google Workspace de Trulab, validado contra Usuarios y rol; sin contraseñas (ADR-006)
+- [x] **DP-02 ✅** Proyecto = lista cerrada en cada gasto; Segmentador = filtro de fechas (ADR-017, ADR-018)
+- [x] **DP-04 ✅** Solo FINANCIERO registra el valor transferido; regla de recursos propios (ADR-019)
+- [x] **DP-07 ✅** Estructura real de las 5 tablas (ADR-020)
+- [x] **DP-13 ✅** Dos dimensiones de estado + espejo (ADR-021)
+- [x] **DP-14 ✅** Tablas maestras `proyectos`, `rubros`, `celulas` administradas por SUPERADMIN (ADR-022, reemplaza el mecanismo de ADR-017)
+- [x] **DP-15 ✅** `soporte` = imagen, `archivo` = PDF, al menos uno (ADR-023)
+- [x] **DP-16 ✅** Indicadores sobre `fecha_factura` (ADR-024)
+- [x] **DP-17 ✅** Recursos propios lo marca el viajero al crear (ADR-019)
+- [x] **DP-18 ✅** ADMIN = operación; FINANCIERO = tesorería (ADR-025)
+- [x] **RN-27 ✅** Sin autoaprobación, definitiva (solo SUPERADMIN, con auditoría)
+- [x] **DP-14 ✅** Confirmada definitivamente por el negocio
+- [x] Memoria del proyecto actualizada
+- [x] Rama renombrada a `main` y commit final de documentación
 
 ## Trabajo pendiente
 
-- [ ] **Resolver las decisiones abiertas**, como mínimo DP-01, DP-02, DP-04 y DP-07 (`SPEC.md` §17). Siguen **pendientes a propósito**
-- [ ] Push del commit a `origin/main`
-- [ ] Revisión de la documentación por el dueño del producto
-- [ ] Semana 0: tareas P-1 a P-5 (`SPRINTS.md`)
-- [ ] Semanas 1 a 4 completas
+- [ ] Push de `main` a `origin` (cuando el usuario lo pida) y protección de la rama en GitHub
+- [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
+- [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
+- [ ] Semanas 1 a 4
 
 ## Próxima tarea sugerida
 
-**Resolver las decisiones abiertas antes de iniciar el Sprint 1.**
-1. Responder DP-01 (método de login), DP-02 (proyecto o `Segmentador`), DP-04 (quién registra `valor_transferido`) y DP-07 (exportación real de AppSheet). El resto puede quedarse con su valor por defecto.
-2. Registrar cada respuesta en `SPEC.md` §17 y, si cambia la arquitectura, como ADR en `docs/architecture.md` §13.
-3. Pedir la **exportación de AppSheet** (CSV de las 5 tablas y soportes): es el principal riesgo del proyecto.
-4. Solo entonces, empezar **S1-01** (estructura del monorepo) con `agent-skills:build`.
+**Iniciar oficialmente el Sprint 1** con S1-01 (estructura del monorepo), usando `agent-skills:build`. En paralelo, sin bloquear al desarrollador:
+1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
+2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
+3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
 
-## Decisiones pendientes (detalle y recomendación en `SPEC.md` §17)
+## Decisiones
 
-| ID | Tema | Bloquea | Estado |
-| :--- | :--- | :--- | :--- |
-| DP-01 | Login solo Google o también contraseña | F2 | Abierta (por defecto: Google + `trulab.co`) |
-| DP-02 | Proyecto o centro de costo; qué es `Segmentador` | F4 | Abierta |
-| DP-03 | Estado `DEVUELTA` en el MVP | F4 | Abierta (por defecto: sí) |
-| DP-04 | Quién registra `valor_transferido` | F4 | Abierta (por defecto: FINANCIERO/ADMIN) |
-| DP-05 | Hosting y almacenamiento | F10 (decidir en la semana 2) | Abierta |
-| DP-06 | Correos en el MVP | F6 | Abierta (por defecto: opcional en la semana 3) |
-| DP-07 | Esquema real y exportación de AppSheet | F4, F10 | **Abierta, crítica** |
-| DP-08 | Paleta y logo corporativos | UI | Abierta (tokens provisionales) |
-| DP-09 | Prefijos de folio | F3 | Abierta |
-| DP-10 | Semántica del saldo negativo y datos al pagar | F6 | Abierta |
-| DP-11 | Moneda solo COP | — | Por defecto: COP |
-| DP-12 | Financiero edita gastos ajenos | F5 | Abierta (por defecto: no) |
+### Resueltas: definitivas, no reabrir (detalle en `SPEC.md` §17.1)
+
+| ID | Resolución | ADR |
+| :--- | :--- | :--- |
+| DP-01 ✅ | Solo Google OAuth con Google Workspace de Trulab. Acceso solo si el correo está en Usuarios, activo y con rol. Sin registro público ni gestión de contraseñas | ADR-006 |
+| DP-02 ✅ | Proyecto = lista cerrada en `gastos` (no en la legalización). Segmentador = filtro `desde`/`hasta`, no se migra | ADR-017, ADR-018 |
+| DP-03 ✅ | Absorbida por DP-13: *Devolver* regresa a `PENDIENTE` con comentario | ADR-021 |
+| DP-04 ✅ | Solo FINANCIERO (y SUPERADMIN) registra o modifica el valor transferido. `valor_transferido = recursos_propios ? 0 : Valor_T` | ADR-019 |
+| DP-07 ✅ | Estructura real validada: Cargos, Usuarios, Crear_legalizacion, Registro_Gastos, Segmentador | ADR-020 |
+| DP-13 ✅ | `estado` = PENDIENTE / APROBADO / RECHAZADO (ADMIN); `estado_financiero` = PENDIENTE / TRANSFERIDO / PAGADO / PROCESADO (FINANCIERO); `Estado legalizacion` = espejo | ADR-021 |
+| DP-14 ✅ | Catálogos `proyectos`, `rubros`, `celulas` en tablas maestras, administradas por SUPERADMIN | ADR-022 |
+| DP-15 ✅ | `soporte` (imagen) o `archivo` (PDF); al menos uno por gasto | ADR-023 |
+| DP-16 ✅ | Indicadores sobre `gastos.fecha_factura`; sin fechas de viaje | ADR-024 |
+| DP-17 ✅ | Recursos propios: lo marca el VIAJERO al crear; transferido = 0, la empresa reembolsa | ADR-019 |
+| DP-18 ✅ | ADMIN aprueba, rechaza, devuelve y revisa; no toca valor transferido, `Estado_P`, pagos ni liquidación | ADR-025 |
+| RN-27 ✅ | Nadie aprueba, valida financieramente ni paga una legalización creada por sí mismo; solo SUPERADMIN (soporte, contingencia, administración, pruebas controladas), con auditoría | ADR-025 |
+
+### Abiertas, no bloqueantes (detalle en `SPEC.md` §17.2)
+
+| ID | Tema | Cuándo |
+| :--- | :--- | :--- |
+| DP-05 | Hosting y almacenamiento | Gate de la semana 2 |
+| DP-06 | Correos en el MVP | F6 (opcional) |
+| DP-08 | Paleta y logo | UI (hay tokens provisionales) |
+| DP-09 | Formato de folios / IDs históricos de AppSheet | F3 |
+| DP-10 | Qué se registra al pagar (la semántica del signo ya la respalda DP-17) | F6 |
+| DP-11 | Solo COP | — |
+| DP-12 | Financiero no edita gastos ajenos | F5 |
 
 ## Riesgos conocidos
 
 1. **Calendario ajustado:** déficit de unas 20 h en las semanas 1 y 2 (`SPRINTS.md`, resumen de capacidad). Plan B: una semana 5 de holgura.
-2. **Modelo de datos deducido por ingeniería inversa:** puede no coincidir con AppSheet (DP-07).
-3. **Migración de soportes** desde AppSheet o Google Drive: volumen y permisos desconocidos.
-4. **Dependencia externa** para el OAuth Client ID (admin de Google Workspace).
-5. **WeasyPrint en Windows:** mitigado ejecutando el backend en Docker.
-6. **Campo "proyecto" ausente** en el modelo pero requerido por el dashboard (DP-02).
+2. **Alcance nuevo sin estimar** (por instrucción, el plan no se re-estimó): administración de catálogos para SUPERADMIN (RF-016, F-03b), segunda dimensión de estado (`estado_financiero`) y tres acciones de ADMIN en lugar de dos. Estimación informal: +6 a 8 h repartidas entre S2-04, S2-05, S2-10 y S3-01. Agrava el riesgo 1.
+3. **Supuestos S-01 a S-08 por validar** (S-06 ya es la regla definitiva RN-27) (`SPEC.md` §17.3), en especial la semántica y el orden de `Estado_P` (S-03), devolver desde `APROBADO` (S-01) y la ausencia de un paso "enviar" (S-02): ADMIN podría aprobar mientras el viajero aún carga gastos.
+4. **Datos históricos inconsistentes** con las reglas nuevas: `Estado_P` `Pagado` con `Estado` distinto de `Aprobado`, valores de catálogo con grafías distintas, PDF guardados en `Soporte`. El ETL los reporta; hay que decidir con el negocio antes del corte.
+5. **Migración de soportes** desde AppSheet o Google Drive: volumen y permisos desconocidos (P-2). Dos adjuntos por gasto.
+6. **Dependencia externa** para el OAuth Client ID (admin de Google Workspace).
+7. **WeasyPrint en Windows:** mitigado ejecutando el backend en Docker.
+8. **Datos personales:** la cédula (usuarios y legalizaciones) exige un manejo cuidadoso (RNF-09).
+9. **Hosting (DP-05)** sin decidir: bloquea la infraestructura de la semana 3 si no se resuelve en el gate de la semana 2.
 
-## Inconsistencias detectadas en el informe original (registradas en SPEC como DP; pendientes de decisión)
+## Diferencias entre el informe original y la app real (resueltas en la documentación)
 
-- Autenticación: dice Google OAuth (actual) y también JWT con bcrypt (RF-001) → DP-01.
-- Dashboard por proyecto sin campo de proyecto en el modelo; `Segmentador` sin definir → DP-02.
-- Estados: menciona "Pendiente", "Borrador", "Legalizado" y "Pagado" sin una máquina de estados formal → RN-05 y DP-03.
-- La matriz RBAC permite D/U del viajero sin considerar el estado → aclarado en `SPEC.md` §6 (nota ¹).
-- El ETL, las notificaciones por correo y Google Chat no tienen sprint asignado coherente → ETL en la semana 3 y 4; correo opcional; Chat a futuro.
+- El proyecto estaba en la legalización → realmente está **en el gasto** (lista cerrada, ahora tabla maestra).
+- `Segmentador` como "clasificación" → realmente es **solo un filtro de fechas**, que se aplica sobre la **fecha de factura**.
+- Login con JWT y contraseña bcrypt → realmente es **solo Google Workspace**, sin contraseñas.
+- `fecha_inicio`/`fecha_fin` → realmente solo hay **`Fecha legalizacion`**; no se agregan fechas de viaje.
+- Un estado `BORRADOR → LEGALIZADA → PAGADA` → realmente hay **dos**: operativo (Pendiente/Aprobado/Rechazado, ADMIN) y financiero (Pendiente/Transferido/Pagado/Procesado, FINANCIERO), más un espejo.
+- ADMIN pagaba y devolvía → realmente ADMIN es **operación** (aprueba, rechaza, devuelve) y no toca dinero.
+- Gasto con `descripcion` y un soporte → realmente tiene **rubro, concepto, CC_Nit, empresa, observaciones, Soporte (imagen) y Archivo (PDF)**, con al menos uno de los dos.
+- Usuario sin cédula ni célula → realmente tiene **cédula y célula**.
+- Valor transferido manual → realmente se **calcula a partir de Recursos propios** (que marca el viajero) y `Valor_T` (que registra FINANCIERO).
 
 ---
 
 ## Historial de sesiones
 
+### 2026-11-11 · Sesión 3: análisis funcional definitivo (DP-13 a DP-18)
+- Resueltas DP-13, DP-14, DP-15, DP-16, DP-17 y DP-18; DP-03 absorbida por DP-13. Nuevos ADR-021 a ADR-025; ADR-017 queda reemplazado en su mecanismo por ADR-022; ADR-019 incluye DP-17.
+- Reglas reescritas: RN-03, RN-05, RN-06, RN-07, RN-09, RN-10, RN-13, RN-16, RN-18. Reglas nuevas: RN-20 a RN-27. RF-016 (catálogos) nuevo; RF-005, RF-006, RF-007, RF-010, RF-013 y RF-015 ajustados. Supuestos S-01 a S-08 en `SPEC.md` §17.3.
+- Modelo de datos: `estado` + `estado_financiero` con `CHECK` de coherencia, tablas `proyectos`/`rubros`/`celulas`, `soporte_id`/`archivo_id`, nuevos eventos (`APROBAR`, `RECHAZAR`, `CAMBIAR_ESTADO_FINANCIERO`), mapeo de estados con emojis para el ETL.
+- API: acciones `aprobar`, `rechazar`, `devolver` (ADMIN) y `estado-financiero` (FINANCIERO); endpoints de catálogos para SUPERADMIN; indicadores sobre `fecha_factura`.
+- Documentos: `SPEC.md` (v0.3), `CLAUDE.md`, `HANDOFF.md`, `docs/database-design.md`, `docs/architecture.md`, `docs/api-design.md`, `docs/user-flows.md`, `docs/design-system.md`; en `ROADMAP.md` y `SPRINTS.md` solo marcas de estado de las decisiones y una nota de terminología (sin cambios en tareas ni estimaciones).
+- Validación con el negocio: RN-27 pasa de supuesto (S-06) a regla definitiva; DP-14 confirmada (tablas maestras, cambio solo interno). Documentación congelada.
+- Rama `master` renombrada a `main`; commit "docs: finalize requirements, business rules and project decisions". Sin push.
+- El proyecto queda listo para iniciar oficialmente el Sprint 1.
+
+### 2026-11-10 · Sesión 2: resolución de decisiones principales
+- Resueltas DP-01, DP-02, DP-04 y DP-07 con evidencia de la configuración y la estructura real de AppSheet. Registradas como definitivas (ADR-006 y ADR-017 a ADR-020).
+- Nuevas reglas de negocio: RN-14 a RN-19. RF-002 eliminado; RF-015 agregado.
+- Modelo de datos ajustado: `rubro`/`proyecto` en gastos, `recursos_propios` + `valor_asignado` + `valor_transferido` generado, instantánea del colaborador, cédula y célula.
+- Nuevas preguntas abiertas DP-13 a DP-18 (resueltas en la sesión 3). La planificación no cambió.
+
 ### 2026-11-10 · Sesión 1: inicialización y documentación base
 - Git inicializado, identidad local `John.Hernandez@trulab.co`, remote `origin` configurado (repositorio remoto vacío).
 - Generada toda la documentación estratégica a partir del informe. Sin código.
 - Revisión de consistencia: unificado el plazo de DP-05 (antes de cerrar la semana 2), DP-07 apunta a F4 y F10, aclarada la nota ¹ de RBAC (editar vs eliminar).
-- Commit local del hito 0. Las decisiones DP-01, DP-02, DP-04 y DP-07 siguen abiertas.
+- Commit local del hito 0 (`7db3188`).
