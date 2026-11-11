@@ -22,7 +22,13 @@
 - pre-commit con hooks genéricos, `ruff` y `ruff-format` (sobre `backend/` y `scripts/`) y un hook local que **bloquea cualquier `.env`**. ESLint/Prettier y mypy se agregan cuando existan sus dependencias (S1-03, S1-05); CI los corre igual (S1-06).
 - `.env.example` documenta todas las variables previstas, agrupadas por la tarea que las usa, sin secretos. Separa `trulab_owner` (migraciones) de `trulab_app` (API, sin `BYPASSRLS`).
 - `scripts/etl_appsheet/input/` y `output/` están ignorados: contendrán datos personales (RNF-09).
-- **Validación:** YAML de pre-commit válido; sin CRLF, sin espacios al final y con salto de línea final en los archivos nuevos; `.env` y `.env.local` ignorados y `.env.example` versionado. **`pre-commit run` no se pudo ejecutar** en este equipo (ver riesgo 9).
+- **Validación:** YAML de pre-commit válido; sin CRLF, sin espacios al final y con salto de línea final en los archivos nuevos; `.env` y `.env.local` ignorados y `.env.example` versionado.
+
+**Entorno de desarrollo con Python 3.12 (complemento de S1-01 y P-5):**
+- Instalado **Python 3.12.10** con `winget install --id Python.Python.3.12 -e --scope user` y las opciones `InstallAllUsers=0 PrependPath=0 Include_launcher=0 AssociateFiles=0 Shortcuts=0`, en `C:\Users\famil\AppData\Local\Programs\Python\Python312\python.exe`. **Python 3.15 se conserva** y sigue siendo el predeterminado del sistema y del `py` launcher; 3.12 se usa con `py -3.12`.
+- Entorno virtual: `py -3.12 -m venv .venv` (en la raíz, ignorado por git) con `pre-commit==3.8.0` desde `requirements-dev.txt`.
+- Archivos nuevos: `.python-version` (`3.12`) y `requirements-dev.txt`. En `.pre-commit-config.yaml`: `default_language_version: python: python3.12` e instrucciones de instalación con el venv.
+- `pre-commit install` dejó el hook en `.git/hooks/pre-commit`. `pre-commit run --all-files`: **todos los hooks pasan** (los de JSON, TOML, ruff y `.env` se omiten porque aún no hay archivos de ese tipo); no hubo que corregir nada. Los entornos de los hooks se crearon con Python 3.12.10. El bloqueo de `.env` se probó con un archivo temporal (falla como debe) y el archivo se eliminó.
 
 ### Sesión anterior
 
@@ -47,12 +53,12 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] Rama renombrada a `main` y commit final de documentación
 - [x] Baseline publicado en GitHub (`origin/main` = `62b91cf`)
 - [x] **S1-01** Estructura del monorepo y configuración base (rama `feat/f1-estructura-monorepo`)
+- [x] Entorno local con Python 3.12 (`.venv`), `pre-commit install` y `pre-commit run --all-files` en verde
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Ejecutar `pre-commit install` y `pre-commit run --all-files` en cuanto haya Python 3.12 o Docker disponible (P-5)
 - [ ] Sprint 1: S1-02 a S1-13
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
@@ -60,7 +66,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-02** · `docker-compose.yml` con PostgreSQL 16, API con recarga, frontend y MinIO opcional (3 h, depende de S1-01; skill `agent-skills:ci-cd-and-automation`). **Requiere Docker Desktop encendido** (P-5). S1-05 (frontend) también depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
+**S1-02** · `docker-compose.yml` con PostgreSQL 16, API con recarga, frontend y MinIO opcional (3 h, depende de S1-01; skill `agent-skills:ci-cd-and-automation`). Docker Desktop ya está operativo. S1-05 (frontend) también depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
@@ -106,7 +112,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 6. **Dependencia externa** para el OAuth Client ID (admin de Google Workspace).
 7. **WeasyPrint en Windows:** mitigado ejecutando el backend en Docker.
 8. **Datos personales:** la cédula (usuarios y legalizaciones) exige un manejo cuidadoso (RNF-09).
-9. **Entorno local incompleto (P-5, R1.3):** Docker Desktop no estaba en ejecución y el único Python instalado es 3.15, sin wheels de PyYAML (compilarlo exige Visual C++), así que no se pudo correr `pre-commit`. Instalar Python 3.12 o encender Docker antes de S1-02; S1-02 y S1-03 necesitan Docker.
+9. **Dos Pythons en el equipo:** 3.15 es el predeterminado del sistema y no sirve para el proyecto (sin wheels de PyYAML). *Mitigación:* `.python-version`, `.venv` con 3.12 y `default_language_version` en pre-commit; ejecutar siempre desde `.venv`. Docker Desktop ya funciona (necesario para S1-02 y S1-03).
 9. **Hosting (DP-05)** sin decidir: bloquea la infraestructura de la semana 3 si no se resuelve en el gate de la semana 2.
 
 ## Diferencias entre el informe original y la app real (resueltas en la documentación)
@@ -130,6 +136,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - S1-01: carpetas `backend/`, `frontend/`, `infra/`, `scripts/etl_appsheet/` con README; `.gitignore`, `.editorconfig`, `.gitattributes`, `.env.example`, `.pre-commit-config.yaml`. Commit en `feat/f1-estructura-monorepo`.
 - `pre-commit` no ejecutado por falta de Python 3.12/Docker; validación manual equivalente sobre los archivos nuevos.
 - Se detuvo tras S1-01 a pedido del usuario.
+- Corrección del entorno: Python 3.12.10 instalado junto a 3.15 (sin tocarlo), `.venv` con 3.12, `.python-version`, `requirements-dev.txt`, pre-commit fijado a 3.12. `pre-commit run --all-files` en verde. Commit en la misma rama; sin merge ni push.
 
 ### 2026-11-11 · Sesión 3: análisis funcional definitivo (DP-13 a DP-18)
 - Resueltas DP-13, DP-14, DP-15, DP-16, DP-17 y DP-18; DP-03 absorbida por DP-13. Nuevos ADR-021 a ADR-025; ADR-017 queda reemplazado en su mecanismo por ADR-022; ADR-019 incluye DP-17.

@@ -1,10 +1,17 @@
 # Hooks de pre-commit (SPEC.md §14, "Calidad").
-# Instalación: pip install pre-commit && pre-commit install
-# Ejecución manual: pre-commit run --all-files
+# Instalación (Python 3.12, ver .python-version y requirements-dev.txt):
+#   py -3.12 -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements-dev.txt
+#   .venv\Scripts\pre-commit install
+# Ejecución manual: .venv\Scripts\pre-commit run --all-files
 #
 # Alcance de S1-01: hooks genéricos + ruff para el backend.
 # ESLint/Prettier (frontend) y mypy (backend) se agregan cuando existan sus dependencias
 # (S1-05 y S1-03); CI los ejecuta igualmente (S1-06).
+
+# Los entornos de los hooks se crean con Python 3.12, aunque el sistema tenga otra versión por defecto.
+default_language_version:
+  python: python3.12
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

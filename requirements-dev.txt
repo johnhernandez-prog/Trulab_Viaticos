@@ -1,0 +1,7 @@
+# Herramientas de desarrollo del repositorio (Python 3.12, ver .python-version).
+# Las dependencias del backend se declaran en backend/ (S1-03).
+#
+#   py -3.12 -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements-dev.txt
+#   .venv\Scripts\pre-commit install
+pre-commit==3.8.0

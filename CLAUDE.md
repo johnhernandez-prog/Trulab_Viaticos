@@ -92,7 +92,8 @@ Se confirmaron contra la configuración y la estructura real de AppSheet. Solo c
 - **Migraciones solo con Alembic.** Los tipos TS se generan desde OpenAPI; no se escriben a mano.
 - **Git:** rama `main` protegida; ramas `feat/<fase>-<tema>`, `fix/...`; commits convencionales en español (`feat(gastos): subir soporte`).
 - **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día. Un hook de pre-commit bloquea cualquier `.env`.
-- **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml` (`pre-commit install`); ESLint/Prettier y mypy se agregan con sus dependencias (S1-03, S1-05).
+- **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml`; ESLint/Prettier y mypy se agregan con sus dependencias (S1-03, S1-05).
+- **Python local = 3.12** (`.python-version`), en `.venv` creado con `py -3.12 -m venv .venv` e instalado con `requirements-dev.txt`. El equipo también tiene Python 3.15 como predeterminado del sistema: **no usarlo** para el proyecto (sin wheels de PyYAML). Usar siempre `.venv\Scripts\python` y `.venv\Scripts\pre-commit`.
 - **Identidad git local:** `John Hernandez <John.Hernandez@trulab.co>`; remote `origin` en GitHub (`johnhernandez-prog/Trulab_Viaticos`).
 
 ## Estado actual
