@@ -5,9 +5,8 @@
 #   .venv\Scripts\pre-commit install
 # Ejecución manual: .venv\Scripts\pre-commit run --all-files
 #
-# Alcance de S1-01: hooks genéricos + ruff para el backend.
-# ESLint/Prettier (frontend) y mypy (backend) se agregan cuando existan sus dependencias
-# (S1-05 y S1-03); CI los ejecuta igualmente (S1-06).
+# Hooks genéricos (S1-01), ruff (S1-01) y mypy del backend (S1-03).
+# ESLint/Prettier (frontend) se agregan en S1-05; CI los ejecuta igualmente (S1-06).
 
 # Los entornos de los hooks se crean con Python 3.12, aunque el sistema tenga otra versión por defecto.
 default_language_version:
@@ -38,6 +37,21 @@ repos:
         files: ^(backend|scripts)/
       - id: ruff-format
         files: ^(backend|scripts)/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        files: ^backend/
+        args: [--config-file=backend/pyproject.toml]
+        # Mismas versiones que backend/requirements*.txt (mantenerlas sincronizadas).
+        additional_dependencies:
+          - fastapi==0.115.4
+          - pydantic==2.9.2
+          - pydantic-settings==2.6.1
+          - sqlalchemy==2.0.36
+          - pytest==8.3.3
+          - httpx==0.27.2
 
   - repo: local
     hooks:

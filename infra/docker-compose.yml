@@ -1,13 +1,13 @@
 # Entorno local de Trulab Viajes (S1-02, docs/architecture.md §12).
 #
 # Uso desde la raíz del repositorio (el `.env` define COMPOSE_FILE=infra/docker-compose.yml):
-#   docker compose up -d                 # solo la base de datos
-#   docker compose --profile app up -d   # base de datos + API + frontend (cuando existan S1-03 y S1-05)
+#   docker compose up -d                 # base de datos + API
+#   docker compose --profile app up -d   # además el frontend (cuando exista S1-05)
 # Sin COMPOSE_FILE en el .env:
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d
 #
-# Los servicios `api` y `frontend` están en el perfil `app` hasta que exista su código:
-# S1-03 quita el perfil de `api` y S1-05 el de `frontend`.
+# `frontend` está en el perfil `app` hasta que exista su código: S1-05 quita el perfil.
+# (`api` lo tuvo hasta S1-03.)
 # MinIO no se incluye: sus imágenes oficiales ya no se publican en registros públicos; en local se usa
 # STORAGE_BACKEND=local (SPEC.md §14: "en local, MinIO o el sistema de archivos").
 
@@ -36,7 +36,6 @@ services:
       start_period: 10s
 
   api:
-    profiles: ["app"]
     build:
       context: ..
       dockerfile: infra/docker/backend.Dockerfile

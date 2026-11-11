@@ -17,13 +17,13 @@ infra/
 
 | Comando | Qué levanta |
 | :--- | :--- |
-| `docker compose up -d` | PostgreSQL 16 (`db`), en `127.0.0.1:5433` (5433 para no chocar con un PostgreSQL nativo de Windows) |
-| `docker compose --profile app up -d` | `db` + `api` (FastAPI con recarga, `:8000`) + `frontend` (Vite, `:5173`) |
+| `docker compose up -d` | PostgreSQL 16 (`db`) en `127.0.0.1:5433` (5433 para no chocar con un PostgreSQL nativo de Windows) y la API (`api`, FastAPI con recarga) en `127.0.0.1:8000` |
+| `docker compose --profile app up -d` | Además el `frontend` (Vite, `:5173`) |
 | `docker compose ps` | Estado y salud de los servicios |
 | `docker compose down` | Detiene todo; los datos siguen en los volúmenes |
 | `docker compose down -v` | Detiene y **borra** los volúmenes (BD incluida) |
 
-`api` y `frontend` están en el perfil `app` hasta que exista su código: S1-03 (backend) y S1-05 (frontend) quitan el perfil.
+`frontend` está en el perfil `app` hasta que exista su código (S1-05 quita el perfil). `api` salió del perfil en S1-03.
 
 **Volúmenes:** `pgdata` (BD), `api-storage` (soportes en desarrollo) y `frontend-node-modules`. **Red:** `trulab-viajes`.
 

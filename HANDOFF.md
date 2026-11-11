@@ -8,12 +8,32 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅ y S1-02 ✅ terminadas**; S1-03 a S1-13 pendientes |
-| Código | Estructura, configuración y entorno Docker; no hay código de aplicación |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 y S1-02 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Semana del sprint | Semana 1: **S1-01 ✅, S1-02 ✅ y S1-03 ✅ terminadas**; S1-04 a S1-13 pendientes |
+| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker; sin lógica de negocio ni frontend |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-03 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-11 |
 
 ## Última actividad
+
+**S1-03 · Backend esqueleto.** FastAPI mínimo y operativo dentro del contenedor `api`:
+- `app/main.py` con `create_app()`; `core/config.py` (pydantic-settings; `DATABASE_URL` obligatoria), `core/db.py` (engine síncrono creado al primer uso, `get_db`, `bd_disponible`), `core/errors.py` (problem+json RFC 9457 y base `ErrorDominio`), `core/middleware.py` (`X-Request-ID` y log de acceso), `core/logs.py` (JSON con `request_id`), `core/health.py` (`GET /api/v1/health`).
+- `requirements.txt` (FastAPI 0.115.4, uvicorn 0.32.0, Pydantic 2.9.2, pydantic-settings 2.6.1, SQLAlchemy 2.0.36, psycopg 3.2.3), `requirements-dev.txt` (pytest, httpx, ruff 0.6.9, mypy 1.13.0) y `pyproject.toml` (configuración de ruff, mypy strict y pytest).
+- 13 pruebas (`tests/`): health contra PostgreSQL real y con BD caída, documentación, problem+json (404, 405, 409 de dominio, 422, 500 sin filtrar detalles), `X-Request-ID` y formato de logs.
+- Compose: **`api` sale del perfil `app`** y arranca con `docker compose up -d`; `frontend` sigue en el perfil hasta S1-05.
+- pre-commit: se agrega **mypy** (`mirrors-mypy` v1.13.0, con las mismas versiones de dependencias que `requirements*.txt`).
+
+**Decisiones técnicas de S1-03:**
+- **Documentación en `/api/v1/docs` y `/api/v1/openapi.json`**, no en la raíz: `docs/api-design.md` §1 fija el contrato OpenAPI bajo el prefijo versionado. Se desactiva con `ENV=production` (y ReDoc no se publica).
+- **Health `200`/`503`:** `{status, version, db}` como dice `docs/api-design.md` §2; con la BD caída responde 503 para que el healthcheck de Docker marque la API como no sana. Conexión con `connect_timeout=3`.
+- **Engine perezoso:** importar la app no abre conexiones; la primera consulta crea el engine (con `pool_pre_ping`).
+- **`X-Request-ID`:** se conserva el del cliente solo si cumple `^[A-Za-z0-9._-]{1,128}$`; si no, se genera un UUID. Va en todas las respuestas, también en los 500, y en cada línea de log.
+- **Logs:** JSON en stdout con la librería estándar (sin dependencias nuevas). El access log de uvicorn se reemplaza por uno propio con `request_id` y duración; solo se registran método y ruta (sin query string, RNF-09).
+- **Errores:** códigos estables de `docs/api-design.md` §7 por estado HTTP; se agrega `METODO_NO_PERMITIDO` (405), que el contrato no listaba. El 500 no expone detalles; el traceback va solo al log.
+- **`core/logs.py`** (no `logging.py`) para no tapar el módulo estándar `logging`; `health` vive en `core/` porque no es un dominio de negocio.
+- **`DATABASE_URL` hasta S1-04:** el rol `trulab_app` aún no existe; en el `.env` local se apunta a `trulab_owner` (anotado en `.env.example`).
+- **Fuera de alcance, a propósito:** Alembic y roles de BD (S1-04), `SET LOCAL` de RLS (S1-09), auth (S1-08), CORS (cuando la SPA llame a la API), modelos y módulos de dominio.
+
+**Validaciones de S1-03 (con un `.env` temporal, luego eliminado):** `docker compose build api` correcto; `docker compose up -d` deja `db` y `api` *healthy*; desde Windows, `GET /api/v1/health` → 200 `{"status":"ok","version":"0.1.0","db":"ok"}` con `X-Request-ID`; `/api/v1/docs` → Swagger UI; `/api/v1/openapi.json` → OpenAPI 3.1 con `/api/v1/health`; `/docs` y `/openapi.json` en la raíz → 404 problem+json. Con la BD detenida, health → 503, y se recupera solo al volver la BD. La recarga automática detectó cambios en archivos montados desde Windows. En el contenedor: `ruff check`, `ruff format --check`, `mypy` strict y **13/13 pruebas** en verde (queda un `DeprecationWarning` de anyio dentro de Starlette, ajeno al proyecto). `pre-commit run --all-files`: todo en verde, incluido mypy. Entorno de prueba limpiado (`down -v`).
 
 **S1-02 · Docker Compose local.** Archivos nuevos: `infra/docker-compose.yml`, `infra/docker/backend.Dockerfile`, `infra/docker/frontend.Dockerfile` y `.dockerignore`. Modificados: `.env.example` (bloque de Compose y puertos) e `infra/README.md` (instrucciones de uso).
 
@@ -80,19 +100,20 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-01** Estructura del monorepo y configuración base (rama `feat/f1-estructura-monorepo`)
 - [x] Entorno local con Python 3.12 (`.venv`), `pre-commit install` y `pre-commit run --all-files` en verde
 - [x] **S1-02** Docker Compose local: PostgreSQL 16, API y frontend (perfil `app`), red y volúmenes
+- [x] **S1-03** Backend esqueleto: FastAPI, config, db, health, problem+json, X-Request-ID, logs JSON; 13 pruebas
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-02 a S1-13
+- [ ] Sprint 1: S1-04 a S1-13
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
 - [ ] Semanas 2 a 4
 
 ## Próxima tarea sugerida
 
-**S1-03** · Backend esqueleto: FastAPI, `core/config`, `core/db`, `/health`, errores problem+json, `X-Request-ID` y logs estructurados (4 h, depende de S1-02; skills `agent-skills:api-and-interface-design`, `agent-skills:build`). Debe crear `backend/requirements.txt` y `requirements-dev.txt`, exponer `app.main:app` y `/api/v1/health`, y quitar el perfil `app` del servicio `api`. S1-05 (frontend) depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
+**S1-04** · Alembic con `naming_convention`, roles de BD `trulab_owner`/`trulab_app` y extensiones `citext` y `pgcrypto` (2 h, depende de S1-03; skill `engineering:architecture`). Al crear `trulab_app`, devolver `DATABASE_URL` del `.env` local a ese rol y quitar la nota de `.env.example`. Alternativa: **S1-05** (frontend esqueleto), que solo depende de S1-01. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
@@ -164,6 +185,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - Se detuvo tras S1-01 a pedido del usuario.
 - Corrección del entorno: Python 3.12.10 instalado junto a 3.15 (sin tocarlo), `.venv` con 3.12, `.python-version`, `requirements-dev.txt`, pre-commit fijado a 3.12. `pre-commit run --all-files` en verde. Commit en la misma rama; sin merge ni push.
 - S1-02: Docker Compose en `infra/` (db PostgreSQL 16.4; api y frontend en el perfil `app`), Dockerfiles de desarrollo, `.dockerignore`. MinIO descartado (imágenes no disponibles); BD en el puerto 5433 del host por un PostgreSQL nativo en 5432. Validado con un `.env` temporal; entorno de prueba limpiado. Commit en la misma rama; sin merge ni push.
+- S1-03: esqueleto FastAPI (`app/main.py`, `core/` config, db, errors, middleware, logs, health), requirements y pyproject, 13 pruebas, `api` fuera del perfil `app`, mypy en pre-commit. Validado en Docker con PostgreSQL real. Commit en la misma rama; sin merge ni push.
 
 ### 2026-11-11 · Sesión 3: análisis funcional definitivo (DP-13 a DP-18)
 - Resueltas DP-13, DP-14, DP-15, DP-16, DP-17 y DP-18; DP-03 absorbida por DP-13. Nuevos ADR-021 a ADR-025; ADR-017 queda reemplazado en su mecanismo por ADR-022; ADR-019 incluye DP-17.

@@ -1,0 +1,8 @@
+# Dependencias de ejecución del backend (Python 3.12). Versiones exactas.
+# Cada tarea agrega las suyas: Alembic (S1-04), google-auth y PyJWT (S1-08), WeasyPrint (F7)...
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
