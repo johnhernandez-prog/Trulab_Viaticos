@@ -1,0 +1,42 @@
+# Hooks de pre-commit (SPEC.md §14, "Calidad").
+# Instalación: pip install pre-commit && pre-commit install
+# Ejecución manual: pre-commit run --all-files
+#
+# Alcance de S1-01: hooks genéricos + ruff para el backend.
+# ESLint/Prettier (frontend) y mypy (backend) se agregan cuando existan sus dependencias
+# (S1-05 y S1-03); CI los ejecuta igualmente (S1-06).
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(backend|scripts)/
+      - id: ruff-format
+        files: ^(backend|scripts)/
+
+  - repo: local
+    hooks:
+      - id: no-env-files
+        name: Bloquear archivos .env (los secretos solo viven en .env local)
+        entry: Los archivos .env no se versionan; use .env.example
+        language: fail
+        files: (^|/)\.env(\..+)?$
+        exclude: (^|/)\.env\.example$

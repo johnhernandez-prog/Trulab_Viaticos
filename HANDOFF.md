@@ -7,15 +7,26 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| Fase | **Todas las decisiones bloqueantes RESUELTAS. Documentación congelada. El proyecto está listo para iniciar oficialmente el Sprint 1** (semana 1 de `SPRINTS.md`) |
-| Semana del sprint | Sprint 1 listo para comenzar; nada bloquea las semanas 1 ni 2 |
-| Código | No existe todavía |
-| Repositorio | Git local, rama **`main`** (renombrada desde `master`). `origin` = `https://github.com/johnhernandez-prog/Trulab_Viaticos.git` (**sin push todavía**). Commits: `7db3188` (hito 0) y el commit de cierre de documentación "docs: finalize requirements, business rules and project decisions" |
+| Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
+| Semana del sprint | Semana 1: **S1-01 ✅ terminada**; S1-02 a S1-13 pendientes |
+| Código | Solo estructura y configuración del repositorio; no hay código de aplicación |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 está en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-11 |
 
 ## Última actividad
 
-Se incorporó a toda la documentación el **análisis funcional definitivo de la app AppSheet original**: DP-13 (estados), DP-14 (catálogos), DP-15 (adjuntos), DP-16 (fecha de análisis), DP-17 (recursos propios) y DP-18 (permisos de ADMIN). Junto con DP-01, DP-02, DP-04 y DP-07 (sesión anterior), quedan **RESUELTAS y definitivas**. DP-03 quedó absorbida por DP-13. Tras la validación con el negocio se confirmaron definitivamente **RN-27** (sin autoaprobación; antes era el supuesto S-06) y **DP-14** (tablas maestras, sin cambio funcional para el usuario). La documentación queda **congelada** como baseline y con commit en `main`. No se modificaron tareas, fases, estimaciones ni calendario.
+**S1-01 · Estructura del monorepo.** Se crearon las carpetas raíz `backend/`, `frontend/`, `infra/`, `scripts/` y `scripts/etl_appsheet/` (cada una con un README que dice qué tarea la llena) y la configuración base: `.gitignore`, `.editorconfig`, `.gitattributes`, `.env.example` y `.pre-commit-config.yaml`. No se escribió código de aplicación ni se tocaron requisitos, reglas, arquitectura, roadmap ni sprints.
+
+**Decisiones técnicas de S1-01:**
+- `.gitattributes` con `eol=lf`: el equipo está en Windows (`core.autocrlf=true`) y el backend corre en contenedores Linux; un CRLF rompe scripts. Los documentos ya estaban en LF en el índice, así que no cambió ninguno.
+- pre-commit con hooks genéricos, `ruff` y `ruff-format` (sobre `backend/` y `scripts/`) y un hook local que **bloquea cualquier `.env`**. ESLint/Prettier y mypy se agregan cuando existan sus dependencias (S1-03, S1-05); CI los corre igual (S1-06).
+- `.env.example` documenta todas las variables previstas, agrupadas por la tarea que las usa, sin secretos. Separa `trulab_owner` (migraciones) de `trulab_app` (API, sin `BYPASSRLS`).
+- `scripts/etl_appsheet/input/` y `output/` están ignorados: contendrán datos personales (RNF-09).
+- **Validación:** YAML de pre-commit válido; sin CRLF, sin espacios al final y con salto de línea final en los archivos nuevos; `.env` y `.env.local` ignorados y `.env.example` versionado. **`pre-commit run` no se pudo ejecutar** en este equipo (ver riesgo 9).
+
+### Sesión anterior
+
+Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, documentación congelada y publicada en GitHub (`62b91cf`).
 
 ## Trabajo completado
 
@@ -34,17 +45,22 @@ Se incorporó a toda la documentación el **análisis funcional definitivo de la
 - [x] **DP-14 ✅** Confirmada definitivamente por el negocio
 - [x] Memoria del proyecto actualizada
 - [x] Rama renombrada a `main` y commit final de documentación
+- [x] Baseline publicado en GitHub (`origin/main` = `62b91cf`)
+- [x] **S1-01** Estructura del monorepo y configuración base (rama `feat/f1-estructura-monorepo`)
 
 ## Trabajo pendiente
 
-- [ ] Push de `main` a `origin` (cuando el usuario lo pida) y protección de la rama en GitHub
+- [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
+- [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
+- [ ] Ejecutar `pre-commit install` y `pre-commit run --all-files` en cuanto haya Python 3.12 o Docker disponible (P-5)
+- [ ] Sprint 1: S1-02 a S1-13
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
-- [ ] Semanas 1 a 4
+- [ ] Semanas 2 a 4
 
 ## Próxima tarea sugerida
 
-**Iniciar oficialmente el Sprint 1** con S1-01 (estructura del monorepo), usando `agent-skills:build`. En paralelo, sin bloquear al desarrollador:
+**S1-02** · `docker-compose.yml` con PostgreSQL 16, API con recarga, frontend y MinIO opcional (3 h, depende de S1-01; skill `agent-skills:ci-cd-and-automation`). **Requiere Docker Desktop encendido** (P-5). S1-05 (frontend) también depende solo de S1-01 y podría ir en paralelo. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
@@ -90,6 +106,7 @@ Se incorporó a toda la documentación el **análisis funcional definitivo de la
 6. **Dependencia externa** para el OAuth Client ID (admin de Google Workspace).
 7. **WeasyPrint en Windows:** mitigado ejecutando el backend en Docker.
 8. **Datos personales:** la cédula (usuarios y legalizaciones) exige un manejo cuidadoso (RNF-09).
+9. **Entorno local incompleto (P-5, R1.3):** Docker Desktop no estaba en ejecución y el único Python instalado es 3.15, sin wheels de PyYAML (compilarlo exige Visual C++), así que no se pudo correr `pre-commit`. Instalar Python 3.12 o encender Docker antes de S1-02; S1-02 y S1-03 necesitan Docker.
 9. **Hosting (DP-05)** sin decidir: bloquea la infraestructura de la semana 3 si no se resuelve en el gate de la semana 2.
 
 ## Diferencias entre el informe original y la app real (resueltas en la documentación)
@@ -107,6 +124,12 @@ Se incorporó a toda la documentación el **análisis funcional definitivo de la
 ---
 
 ## Historial de sesiones
+
+### 2026-11-11 · Sesión 4: inicio del Sprint 1, S1-01
+- Verificado `main` = `origin/main` = `62b91cf`.
+- S1-01: carpetas `backend/`, `frontend/`, `infra/`, `scripts/etl_appsheet/` con README; `.gitignore`, `.editorconfig`, `.gitattributes`, `.env.example`, `.pre-commit-config.yaml`. Commit en `feat/f1-estructura-monorepo`.
+- `pre-commit` no ejecutado por falta de Python 3.12/Docker; validación manual equivalente sobre los archivos nuevos.
+- Se detuvo tras S1-01 a pedido del usuario.
 
 ### 2026-11-11 · Sesión 3: análisis funcional definitivo (DP-13 a DP-18)
 - Resueltas DP-13, DP-14, DP-15, DP-16, DP-17 y DP-18; DP-03 absorbida por DP-13. Nuevos ADR-021 a ADR-025; ADR-017 queda reemplazado en su mecanismo por ADR-022; ADR-019 incluye DP-17.

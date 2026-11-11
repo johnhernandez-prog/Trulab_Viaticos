@@ -37,7 +37,7 @@ El informe original de auditoría de AppSheet (*INFORME FINAL PARA PROYECTO TRUL
 
 Monolito modular: la SPA React habla REST (`/api/v1`) con FastAPI (`routers → services → models`), que usa PostgreSQL y un bucket privado. La autenticación es con Google y una sesión propia (access JWT de 15 min en memoria más refresh rotativo en cookie httpOnly). La autorización va en el service, con RLS como defensa en profundidad.
 
-## Estructura (prevista; aún no existe)
+## Estructura (carpetas raíz creadas en S1-01; el código llega desde S1-03 y S1-05)
 
 ```
 backend/app/{core,modules/<dominio>,templates/pdf}   backend/{alembic,tests}
@@ -91,12 +91,13 @@ Se confirmaron contra la configuración y la estructura real de AppSheet. Solo c
 - **TDD obligatorio** para reglas RN-xx y permisos. Una prueba parametrizada recorre la matriz RBAC.
 - **Migraciones solo con Alembic.** Los tipos TS se generan desde OpenAPI; no se escriben a mano.
 - **Git:** rama `main` protegida; ramas `feat/<fase>-<tema>`, `fix/...`; commits convencionales en español (`feat(gastos): subir soporte`).
-- **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día.
+- **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día. Un hook de pre-commit bloquea cualquier `.env`.
+- **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml` (`pre-commit install`); ESLint/Prettier y mypy se agregan con sus dependencias (S1-03, S1-05).
 - **Identidad git local:** `John Hernandez <John.Hernandez@trulab.co>`; remote `origin` en GitHub (`johnhernandez-prog/Trulab_Viaticos`).
 
 ## Estado actual
 
-**Fase:** documentación base terminada y **todas las decisiones bloqueantes resueltas** (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **No hay código.** El proyecto está **listo para iniciar oficialmente el Sprint 1** (`SPRINTS.md`, semana 1). **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
+**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 terminada** (estructura del monorepo y configuración base); todavía no hay código de aplicación. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
 
 ## Cómo retomar
 

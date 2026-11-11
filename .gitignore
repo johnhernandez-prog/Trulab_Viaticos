@@ -1,0 +1,49 @@
+# --- Secretos y configuración local (nunca se versionan; ver .env.example) ---
+.env
+.env.*
+!.env.example
+
+# --- Python (backend/) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Node (frontend/) ---
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+npm-debug.log*
+
+# --- Pruebas E2E (Playwright) ---
+playwright-report/
+test-results/
+
+# --- Almacenamiento local de archivos y datos de desarrollo ---
+storage/
+.data/
+
+# --- ETL de AppSheet: las exportaciones contienen datos personales (RNF-09) ---
+scripts/etl_appsheet/input/
+scripts/etl_appsheet/output/
+
+# --- Editores y sistema operativo ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+*.log
