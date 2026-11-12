@@ -8,12 +8,65 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-06 ✅ terminadas**; S1-07 a S1-13 pendientes |
-| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); sin tablas de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-06 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ terminadas**; S1-08 a S1-13 pendientes |
+| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-07 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**S1-07 · Modelo de identidad y auditoría.** Migración `20261112_1433_identidad_y_auditoria` (`a154d56e054d`) con 5 tablas, sus modelos SQLAlchemy y el SUPERADMIN inicial. Sin endpoints, sin login ni matriz de permisos.
+
+**Modelo:**
+
+| Tabla | Modelo | Contenido |
+| :--- | :--- | :--- |
+| `usuarios` | `app/modules/usuarios/models.py` | Columnas base + `nombre_completo`, `correo` (**CITEXT**, único, `CHECK` de formato), `cedula` (única entre no eliminados, parcial), `celula_id` → `celulas`, `rol` (`CHECK` con los 4 roles), `cargo_id` → `cargos`, `activo` (por defecto `true`), `google_sub` (único, nulo hasta el primer login), `ultimo_acceso`. **Sin contraseña** (DP-01, RN-15) |
+| `cargos` | `app/modules/cargos/models.py` | Columnas base + `folio` **CA-000001** desde `seq_folio_cargos` (RN-04; la secuencia pertenece a la columna), `nombre` (único sin distinguir mayúsculas entre no eliminados: se puede recrear uno eliminado), `descripcion` |
+| `celulas` | `app/modules/catalogos/models.py` | Catálogo (DP-14): `nombre` único sin distinguir mayúsculas, `activo`, `orden`, autores, `migrado_de`; sin `deleted_at` (se desactiva). Estructura común `ConCatalogo`, reutilizable para `proyectos` y `rubros`. **Sin valores en el código**: llegan de la exportación de AppSheet (P-2) o de la administración (RF-016) |
+| `sesiones` | `app/modules/auth/models.py` | `usuario_id` (FK `CASCADE`), `token_hash` (único; **`CHECK` de 64 hexadecimales**, así que un refresh token en claro no puede guardarse), `expires_at` (> `created_at`), `revoked_at`, `ip` (INET), `user_agent` |
+| `auditoria` | `app/core/audit.py` | `id` BIGINT identity, `usuario_id` (actor, FK `SET NULL`), `accion` (`CHECK` de formato), `entidad`, `entidad_id`, `datos` JSONB (objeto), `ip`, `user_agent`, `created_at` |
+
+- **Columnas base** como mixins en `app/core/models.py` (`ConId`, `ConMarcasDeTiempo`, `ConAutores`, `ConBorradoLogico`, `ConMigradoDe`); todo `datetime` es `TIMESTAMPTZ`. Todas las FK llevan índice; `UNIQUE (migrado_de)` parcial en las tablas que migra el ETL.
+- **Enums del sistema** en `app/core/enums.py` (`Rol`). Las acciones de auditoría en `AccionAuditoria`.
+- **Ciclo de FK** `usuarios` ↔ `cargos`/`celulas` (`created_by` en ambas direcciones): `use_alter=True` en el modelo y FK creadas al final de la migración.
+- **Privilegios de `trulab_app`** (más estrictos que los por defecto): `usuarios`, `cargos` y `celulas` sin `DELETE` (se desactivan o se eliminan lógicamente); `auditoria` solo `INSERT, SELECT`; `sesiones` DML completo.
+- **SUPERADMIN inicial:** `app/modules/usuarios/service.py` (`asegurar_superadmin_inicial`) y el comando `python -m app.modules.usuarios.seed`, que el servicio `migrate` ejecuta tras `alembic upgrade head`. Variables nuevas: `SUPERADMIN_NOMBRE` y, en `Settings`, `google_workspace_domain`, `superadmin_email` y `superadmin_nombre`.
+- `alembic/env.py`: importa los modelos de `app/core` (`MODELOS_CORE`) y omite en `alembic check` los defaults con `nextval()`.
+- **64 pruebas nuevas en el backend** (de 28 a 92): `test_modelo_identidad.py` (restricciones, unicidad, folios, privilegios, sesiones), `test_auditoria.py` (saneamiento, inserción, solo inserción para `trulab_app`), `test_superadmin_inicial.py` (todas las ramas del seed y del comando) y 5 más en `test_migraciones.py` con `trulab_owner` (trigger de solo inserción, purga con `SET NULL`, privilegios). Fixture `sesion` (transacción revertida) y `tests/fabricas.py`.
+
+**Estrategia de auditoría** (docs/database-design.md §7):
+1. **Columnas base** en todas las tablas: `created_at/updated_at` y `created_by/updated_by` (las fija el service con el usuario autenticado desde S1-10; `NULL` = sistema o ETL).
+2. **`auditoria`** para seguridad y administración. `registrar(session, accion, entidad, entidad_id, usuario_id=..., datos=..., ip=..., user_agent=...)` agrega la fila a la **misma transacción** que el cambio. `datos` se sanea: **rechaza** claves de secretos (`token`, `refresh_token`, `id_token`, `token_hash`, `password`, `cookie`, `authorization`…, en cualquier nivel) y **enmascara** la cédula (`******4050`).
+3. **Solo inserción, en dos capas:** `trulab_app` no tiene `UPDATE`/`DELETE`, y el trigger `tg_auditoria__solo_insercion` (más `tg_auditoria__sin_truncate`) rechaza `UPDATE`, `DELETE` y `TRUNCATE` **para cualquier rol**, incluido `trulab_owner`. Única excepción: el `SET NULL` de `usuario_id` que hace la FK si se purga un usuario.
+4. `legalizacion_eventos` (historial funcional) llega con F4.
+
+**Estrategia para Google Workspace** (se implementa en S1-08; el modelo ya está listo):
+- `POST /auth/google` verifica el ID token de Google (firma, `aud` = `GOOGLE_CLIENT_ID`, `iss`, vencimiento, `email_verified`) y exige `hd` = `GOOGLE_WORKSPACE_DOMAIN` (RN-12).
+- Busca el usuario por `correo` (CITEXT: sin distinguir mayúsculas). Si no existe, está inactivo o no tiene rol: **403** y `auditoria` `ACCESO_DENEGADO` (sin token, solo el motivo y el correo).
+- **Primer login:** fija `google_sub` (único). En los siguientes se exige que el `sub` coincida: si la cuenta de Google se recreó con el mismo correo, se deniega hasta que un administrador lo revise. Actualiza `ultimo_acceso`.
+- **Sesión propia** (ADR-005): access JWT de 15 min en memoria; refresh opaco aleatorio en cookie httpOnly, del que en `sesiones` solo se guarda el SHA-256 (el `CHECK` lo garantiza). Rotación en cada `/auth/refresh` (revoca la anterior con `revoked_at` y crea otra); logout, desactivación y cambio de rol revocan las sesiones del usuario.
+- Sin contraseñas ni autorregistro: los usuarios los crean ADMIN o SUPERADMIN (S1-10); el primero, el seed.
+
+**Decisiones técnicas de S1-07:**
+- **`celulas` entra en S1-07** porque `usuarios.celula_id` es FK a ella (§2.2, §3). Solo la tabla y su modelo; `proyectos` y `rubros` llegan con `gastos`, y la API de catálogos con S2-05.
+- **Modelo de auditoría en `app/core/audit.py`** (donde lo ubica `docs/architecture.md` §3), no en un dominio: es transversal.
+- **SUPERADMIN inicial solo si no hay ninguno activo** (y no en cada arranque): la variable de entorno no sirve para crear superadministradores adicionales; si todos quedaran inactivos, el seed recupera el acceso (promueve y reactiva) y lo audita. El comando falla si el correo no es del dominio, así que `migrate` y la API no arrancan con una configuración inválida.
+- **El seed usa `trulab_app`**, no `trulab_owner`: crear un usuario es una operación de la app y respeta sus privilegios.
+- **Sin `DELETE` físico para la app** en `usuarios`, `cargos` y `celulas`: la eliminación lógica queda garantizada también en la BD.
+- **Trigger de solo inserción** además del `REVOKE`: protege la auditoría también frente a `trulab_owner` (ETL o errores manuales).
+- **`updated_at` con `onupdate` del ORM** (el documento admite ORM o trigger): más simple y visible en el modelo.
+- **`entidad` NOT NULL** en `auditoria` (por ejemplo `auth` para `ACCESO_DENEGADO`), para poder consultar por entidad.
+
+**Validaciones de S1-07 (con un `.env` generado por `scripts/crear_env.py`, luego eliminado):**
+- `alembic upgrade head` aplica `a154d56e054d`; `alembic check`: "No new upgrade operations detected"; `downgrade -1` → `upgrade head` → `check` en verde (la secuencia se borra con la tabla).
+- BD: 5 tablas de `trulab_owner`, secuencias `seq_folio_cargos` y `auditoria_id_seq`; privilegios de `trulab_app`: `auditoria` {INSERT, SELECT}, `usuarios`/`cargos`/`celulas` {INSERT, SELECT, UPDATE}, `sesiones` {DELETE, INSERT, SELECT, UPDATE}.
+- Seed de punta a punta con `SUPERADMIN_EMAIL`: primera vez `CREADO` (con `USUARIO_CREAR` en `auditoria`, sin actor), segunda vez `YA_HAY_SUPERADMIN`; con un correo de otro dominio, `migrate` termina con código 1.
+- Pruebas: **92/92** en `migrate`; en `api`, 83 pasan y 9 se omiten (necesitan `trulab_owner`). Las pruebas no dejan datos (transacciones revertidas). Frontend: 17/17.
+- `ruff check`, `ruff format --check` y `mypy` strict (`app tests alembic`) en verde. ESLint, tsc y Prettier del frontend en verde.
+- **CI completa ejecutada en local** (pasos `run:` de `ci.yml`): `backend`, `frontend` e `integracion` en verde (incluye migraciones de ida y vuelta desde cero, `alembic check`, 92 pruebas y el contrato OpenAPI sin cambios). `pre-commit` falló la primera vez con "files were modified by this hook" porque se editó `backend/README.md` mientras corría (no era un error de formato); repetido sin ediciones en paralelo: en verde.
+- `pre-commit run --all-files`: en verde.
+- Limpieza: `docker compose down -v` y `.env` eliminado.
 
 **S1-06 · Integración continua (GitHub Actions).** Workflow `.github/workflows/ci.yml` (`CI`), con cuatro jobs que deben pasar todos:
 
@@ -206,12 +259,13 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-04** Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, extensiones `citext`/`pgcrypto`, servicio `migrate`; 28 pruebas
 - [x] **S1-05** Frontend esqueleto: Vite, React 18, TS, Tailwind, shadcn/ui, tokens, React Router, TanStack Query, `apiClient`, tipos desde OpenAPI; contenedor `frontend` sin perfil (Node 24); 17 pruebas
 - [x] **S1-06** CI en GitHub Actions: `pre-commit`, `backend` (Docker + PostgreSQL), `frontend` (Node 24) e `integracion` (Compose completo + contrato OpenAPI); actionlint; ADR-026
+- [x] **S1-07** Modelos y migración de `usuarios`, `cargos`, `celulas`, `sesiones` y `auditoria` (solo inserción con trigger); SUPERADMIN inicial por `SUPERADMIN_EMAIL`; 92 pruebas de backend
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-07 a S1-13
+- [ ] Sprint 1: S1-08 a S1-13
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
@@ -220,7 +274,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-07** · Migración `cargos`, `usuarios`, `sesiones` y `auditoria`, más el seed del primer SUPERADMIN por variable de entorno (2 h; depende de S1-04; skill `agent-skills:test-driven-development`). Modelos en `app/modules/<dominio>/models.py` heredando de `Base`, `docker compose run --rm migrate alembic revision --autogenerate -m "..."` y, en `auditoria`, revocar `UPDATE`/`DELETE` a `trulab_app`. La CI ya valida la ida y vuelta de las migraciones nuevas. Antes o después, con el usuario: **push de la rama y PR** para la primera ejecución real de la CI en GitHub, y **proteger `main`** exigiendo los checks `pre-commit`, `backend (Docker + PostgreSQL)`, `frontend (Node 24)` e `integración (Docker Compose)`. En paralelo, sin bloquear al desarrollador:
+**S1-08** · Auth: `/auth/google` (verificación del ID token y `hd`), JWT de acceso, refresh rotativo en cookie, `/auth/refresh`, `/auth/logout`, `/me` (5 h; depende de S1-07 ✅ y de **P-3**, el OAuth Client ID; mientras llega, el login de desarrollo solo con `ENV=local`, R1.1; skills `agent-skills:security-and-hardening`, `agent-skills:test-driven-development`). Sigue la estrategia de Google Workspace de S1-07. Necesitará dependencias nuevas (`google-auth`, `PyJWT`) y la variable `JWT_SECRET`. Pendiente con el usuario: push y PR para la primera ejecución real de la CI y proteger `main` con los 4 checks. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.

@@ -4,7 +4,8 @@
   `DATABASE_URL` (rol `trulab_app`), que a propósito no puede crear ni alterar objetos.
 - `target_metadata` es la metadata de `app.core.models.Base`, con la `naming_convention` del
   proyecto. Los modelos de cada dominio (`app/modules/<dominio>/models.py`) se importan solos,
-  así que una tabla nueva aparece en `--autogenerate` sin tocar este archivo.
+  así que una tabla nueva aparece en `--autogenerate` sin tocar este archivo. Los modelos
+  transversales de `app/core` (auditoría) se listan en `MODELOS_CORE`.
 - Cada migración corre en su propia transacción (PostgreSQL admite DDL transaccional).
 """
 
@@ -16,7 +17,8 @@ from logging.config import fileConfig
 from typing import Any
 
 from alembic import context
-from sqlalchemy import create_engine, pool
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import Column, FetchedValue, create_engine, pool
 
 import app.modules
 from app.core.models import Base
@@ -26,8 +28,14 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 
+# Modelos transversales que viven en `app/core` (no en un dominio).
+MODELOS_CORE = ("app.core.audit",)
+
+
 def _importar_modelos() -> None:
-    """Importa `app.modules.<dominio>.models` de cada dominio que lo tenga."""
+    """Importa los modelos de `app/core` y `app.modules.<dominio>.models` de cada dominio."""
+    for nombre in MODELOS_CORE:
+        importlib.import_module(nombre)
     for modulo in pkgutil.iter_modules(app.modules.__path__, prefix="app.modules."):
         if modulo.ispkg and importlib.util.find_spec(f"{modulo.name}.models") is not None:
             importlib.import_module(f"{modulo.name}.models")
@@ -37,12 +45,32 @@ _importar_modelos()
 target_metadata = Base.metadata
 
 
+def _comparar_default(
+    _contexto: MigrationContext,
+    _columna_bd: Column[Any],
+    _columna_modelo: Column[Any],
+    _default_bd: str | None,
+    _default_modelo: FetchedValue | None,
+    default_modelo_sql: str | None,
+) -> bool | None:
+    """Comparación de `server_default` para `--autogenerate` y `alembic check`.
+
+    En PostgreSQL, Alembic compara evaluando ambos defaults. Un default con `nextval()` (folios,
+    docs/database-design.md §11) da un valor distinto cada vez: siempre parecería cambiado y
+    además consumiría la secuencia. Esos se omiten (`False` = sin cambios); para el resto, `None`
+    deja la comparación normal de Alembic.
+    """
+    if default_modelo_sql and "nextval(" in default_modelo_sql:
+        return False
+    return None
+
+
 def _configurar(**destino: Any) -> None:
     """Opciones comunes a los modos online y offline; `destino` es la conexión o la URL."""
     context.configure(
         target_metadata=target_metadata,
         compare_type=True,
-        compare_server_default=True,
+        compare_server_default=_comparar_default,
         transaction_per_migration=True,
         **destino,
     )

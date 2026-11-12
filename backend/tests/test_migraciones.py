@@ -14,6 +14,7 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, create_engine, pool, text
+from sqlalchemy.exc import DBAPIError
 
 URL_MIGRACIONES = os.environ.get("DATABASE_URL_MIGRATIONS", "").strip()
 BACKEND = Path(__file__).resolve().parents[1]
@@ -110,3 +111,78 @@ def test_public_no_concede_nada_a_public(owner: Connection) -> None:
     ).one()
 
     assert tuple(acceso_public) == (False, False, False)
+
+
+# --- auditoría de solo inserción, incluso para el dueño (S1-07) ---------------------------------
+
+
+def _insertar_evento(owner: Connection, usuario_id: object = None) -> int:
+    evento_id = owner.execute(
+        text(
+            "INSERT INTO auditoria (accion, entidad, usuario_id) "
+            "VALUES ('PRUEBA', 'pruebas', :u) RETURNING id"
+        ),
+        {"u": usuario_id},
+    ).scalar_one()
+    return int(evento_id)
+
+
+@requiere_owner
+@pytest.mark.parametrize(
+    "sentencia",
+    [
+        "UPDATE auditoria SET accion = 'ALTERADA' WHERE id = :id",
+        "DELETE FROM auditoria WHERE id = :id",
+    ],
+)
+def test_trigger_impide_modificar_auditoria_al_owner(owner: Connection, sentencia: str) -> None:
+    evento_id = _insertar_evento(owner)
+
+    with pytest.raises(DBAPIError, match="solo inserción"):
+        owner.execute(text(sentencia), {"id": evento_id})
+
+
+@requiere_owner
+def test_trigger_impide_truncate_de_auditoria(owner: Connection) -> None:
+    with pytest.raises(DBAPIError, match="solo inserción"):
+        owner.execute(text("TRUNCATE auditoria"))
+
+
+@requiere_owner
+def test_purga_de_usuario_deja_la_auditoria_sin_actor(owner: Connection) -> None:
+    # Purga física (manual, fuera del MVP): la FK hace SET NULL y el trigger lo admite.
+    usuario_id = owner.execute(
+        text(
+            "INSERT INTO usuarios (nombre_completo, correo, rol) "
+            "VALUES ('Purga', 'purga-prueba@trulab.co', 'VIAJERO') RETURNING id"
+        )
+    ).scalar_one()
+    evento_id = _insertar_evento(owner, usuario_id)
+
+    owner.execute(text("DELETE FROM usuarios WHERE id = :id"), {"id": usuario_id})
+
+    fila = owner.execute(
+        text("SELECT usuario_id, accion FROM auditoria WHERE id = :id"), {"id": evento_id}
+    ).one()
+    assert tuple(fila) == (None, "PRUEBA")
+
+
+@requiere_owner
+def test_privilegios_de_trulab_app_en_tablas_de_identidad(owner: Connection) -> None:
+    filas = owner.execute(
+        text(
+            "SELECT table_name, string_agg(privilege_type, ',' ORDER BY privilege_type) "
+            "FROM information_schema.role_table_grants "
+            "WHERE grantee = 'trulab_app' AND table_name IN "
+            "('usuarios', 'cargos', 'celulas', 'sesiones', 'auditoria') "
+            "GROUP BY table_name"
+        )
+    ).all()
+
+    assert dict(tuple(f) for f in filas) == {
+        "usuarios": "INSERT,SELECT,UPDATE",
+        "cargos": "INSERT,SELECT,UPDATE",
+        "celulas": "INSERT,SELECT,UPDATE",
+        "sesiones": "DELETE,INSERT,SELECT,UPDATE",
+        "auditoria": "INSERT,SELECT",
+    }

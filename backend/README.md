@@ -7,14 +7,20 @@ backend/
 ├── app/
 │   ├── main.py        # create_app(): middlewares, manejadores de error y routers
 │   ├── core/
+│   │   ├── audit.py       # modelo `auditoria` + registrar() (solo inserción, S1-07)
 │   │   ├── config.py      # Settings (variables de entorno)
 │   │   ├── db.py          # engine SQLAlchemy síncrono, get_db, bd_disponible
 │   │   ├── errors.py      # RFC 9457 problem+json, ErrorDominio
 │   │   ├── health.py      # GET /api/v1/health
 │   │   ├── logs.py        # logs JSON con request_id
 │   │   ├── middleware.py  # X-Request-ID y registro de acceso
-│   │   └── models.py      # Base declarativa con la naming_convention (S1-04)
-│   └── modules/       # un paquete por dominio: router → service → models (desde S1-07)
+│   │   ├── enums.py       # enums fijos del sistema (Rol)
+│   │   └── models.py      # Base (naming_convention) y mixins de columnas base
+│   └── modules/       # un paquete por dominio: router → service → models
+│       ├── auth/          # models: sesiones (refresh tokens; endpoints en S1-08)
+│       ├── cargos/        # models: cargos (folio CA-000001)
+│       ├── catalogos/     # models: celulas (proyectos y rubros llegan con los gastos)
+│       └── usuarios/      # models, service (SUPERADMIN inicial), seed (comando)
 ├── alembic/           # migraciones (S1-04)
 │   ├── env.py             # conexión con trulab_owner y descubrimiento automático de modelos
 │   ├── script.py.mako     # plantilla de migraciones nuevas
@@ -26,7 +32,7 @@ backend/
 └── requirements-dev.txt   # + pruebas y calidad (incluye requirements.txt)
 ```
 
-Pendiente en tareas siguientes: módulos de dominio (desde S1-07), `templates/pdf/` (F7).
+Pendiente en tareas siguientes: routers y services de los dominios (desde S1-08), `templates/pdf/` (F7).
 
 ## Uso (desde la raíz del repositorio)
 
@@ -48,7 +54,10 @@ docker compose exec api mypy app tests alembic
 - El esquema cambia **solo** con migraciones de Alembic; nunca a mano.
 - Las migraciones las ejecuta **`trulab_owner`** (`DATABASE_URL_MIGRATIONS`), el dueño de la BD. La API usa **`trulab_app`** (`DATABASE_URL`), que no puede crear ni alterar objetos. El contenedor `api` no recibe `DATABASE_URL_MIGRATIONS`.
 - `docker compose up -d` aplica las pendientes: el servicio `migrate` ejecuta `alembic upgrade head` y la API arranca solo si terminó bien.
-- Los modelos van en `app/modules/<dominio>/models.py` y heredan de `app.core.models.Base`. `alembic/env.py` los importa solo: no hay que registrarlos.
+- Los modelos van en `app/modules/<dominio>/models.py` y heredan de `app.core.models.Base`. `alembic/env.py` los importa solo: no hay que registrarlos. Los transversales de `app/core` (hoy `audit.py`) se listan en `MODELOS_CORE` de `env.py`.
+- **Columnas base** con los mixins de `app/core/models.py`: `ConId` (UUID `gen_random_uuid()`), `ConMarcasDeTiempo` (`created_at`, `updated_at`), `ConAutores` (`created_by`/`updated_by` → `usuarios`, con índice), `ConBorradoLogico` (`deleted_at`) y `ConMigradoDe` (ETL). Todo `datetime` es `TIMESTAMPTZ`.
+- **FK circulares** (una tabla referencia a `usuarios` en `created_by` y `usuarios` la referencia a ella): la FK de `usuarios` lleva `use_alter=True` y la migración la crea al final con `op.create_foreign_key`. `--autogenerate` no ordena bien estos casos: revisar el orden de `create_table`.
+- **Defaults con `nextval()`** (folios): `alembic check` los omite (`_comparar_default` en `env.py`), porque compararlos consumiría la secuencia y siempre parecerían cambiados.
 - Los nombres de constraints e índices salen de la `naming_convention` (`docs/database-design.md` §9): no se escriben a mano. Los `CheckConstraint` sí llevan `name="regla"` y quedan como `ck_<tabla>__<regla>`.
 - Cada tabla nueva que crea `trulab_owner` le da a `trulab_app` **solo** `SELECT, INSERT, UPDATE, DELETE` (y `USAGE, SELECT` sobre sus secuencias) por los privilegios por defecto de la migración inicial. Las tablas de solo inserción (`auditoria`, `legalizacion_eventos`) deben ejecutar `REVOKE UPDATE, DELETE ... FROM trulab_app` en su migración. Las políticas RLS (`... TO trulab_app`) se crean también en migraciones (S2-03).
 - Una migración publicada (en `main`) no se edita: se corrige con otra nueva. Siempre se escribe `downgrade()`.
@@ -67,3 +76,13 @@ docker compose exec api mypy app tests alembic
 | `docker compose run --rm migrate alembic upgrade head --sql` | Ver el SQL sin aplicarlo (revisión antes de producción) |
 
 **Antes de hacer commit de una migración:** `alembic upgrade head`, `alembic downgrade -1`, `alembic upgrade head` y `alembic check` deben pasar, junto con `python -m pytest` en `migrate`. Si dos ramas crean migraciones en paralelo, quedan dos cabezas (la prueba `test_historial_de_migraciones_lineal` falla): se resuelve con `alembic merge heads -m "unir ramas"`.
+
+## SUPERADMIN inicial
+
+`docker compose up -d` lo crea a través del servicio `migrate` (después de `alembic upgrade head`) con `python -m app.modules.usuarios.seed`, a partir de `SUPERADMIN_EMAIL` (y `SUPERADMIN_NOMBRE`):
+
+- Vacío: no hace nada. Debe ser del dominio `GOOGLE_WORKSPACE_DOMAIN`; si no, `migrate` termina con código 1 y la API no arranca.
+- **Solo actúa si no hay ningún SUPERADMIN activo.** La variable no sirve para crear superadministradores adicionales; los demás se gestionan desde la app (S1-10).
+- Si el correo ya existe, lo promueve a SUPERADMIN y lo reactiva (recuperación de acceso). Crear y promover quedan en `auditoria` con `origen = seed` y sin actor.
+- Se conecta como `trulab_app` (crear un usuario es una operación de la aplicación). El correo no va al log.
+- A mano: `docker compose run --rm migrate python -m app.modules.usuarios.seed`.

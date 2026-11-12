@@ -44,8 +44,9 @@ services:
       retries: 10
       start_period: 10s
 
-  # Aplica las migraciones pendientes (alembic upgrade head) con trulab_owner y termina.
-  # La API arranca solo si terminó bien. También sirve para crear migraciones nuevas:
+  # Aplica las migraciones pendientes (alembic upgrade head) con trulab_owner, crea el primer
+  # SUPERADMIN si hace falta (SUPERADMIN_EMAIL; con trulab_app) y termina. La API arranca solo si
+  # terminó bien. También sirve para crear migraciones nuevas:
   #   docker compose run --rm migrate alembic revision --autogenerate -m "descripcion"
   migrate:
     build:
@@ -55,7 +56,7 @@ services:
     env_file:
       - path: ../.env
         required: false
-    command: ["alembic", "upgrade", "head"]
+    command: ["sh", "-c", "alembic upgrade head && python -m app.modules.usuarios.seed"]
     restart: "no"
     volumes:
       - ../backend:/app

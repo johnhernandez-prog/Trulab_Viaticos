@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     # Obligatoria: sin ella la API no arranca. Nunca se registra en logs (contiene la contraseña).
     database_url: str
+    # Dominio de Google Workspace de Trulab (RN-12): solo esos correos pueden ser usuarios.
+    google_workspace_domain: str = "trulab.co"
+    # Primer SUPERADMIN (S1-07): lo crea `python -m app.modules.usuarios.seed` si no hay ninguno.
+    superadmin_email: str = ""
+    superadmin_nombre: str = "Superadministrador"
 
     @property
     def docs_habilitada(self) -> bool:
