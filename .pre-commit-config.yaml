@@ -5,8 +5,10 @@
 #   .venv\Scripts\pre-commit install
 # Ejecución manual: .venv\Scripts\pre-commit run --all-files
 #
-# Hooks genéricos (S1-01), ruff (S1-01) y mypy del backend (S1-03; incluye alembic/ desde S1-04).
-# ESLint/Prettier (frontend) se agregan en S1-05; CI los ejecuta igualmente (S1-06).
+# Hooks genéricos (S1-01), ruff (S1-01), mypy del backend (S1-03; incluye alembic/ desde S1-04) y
+# Prettier, ESLint y tsc del frontend (S1-05). CI los ejecuta igualmente (S1-06).
+# Los del frontend usan frontend/node_modules del equipo: antes, una vez, `npm ci` en frontend/
+# (Node 24, ver frontend/README.md).
 
 # Los entornos de los hooks se crean con Python 3.12, aunque el sistema tenga otra versión por defecto.
 default_language_version:
@@ -56,6 +58,24 @@ repos:
 
   - repo: local
     hooks:
+      - id: frontend-prettier
+        name: Prettier (frontend)
+        entry: npm --prefix frontend run -s format:check
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      - id: frontend-eslint
+        name: ESLint (frontend)
+        entry: npm --prefix frontend run -s lint
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js)$
+        pass_filenames: false
+      - id: frontend-typecheck
+        name: TypeScript (frontend)
+        entry: npm --prefix frontend run -s typecheck
+        language: system
+        files: ^frontend/(.*\.(ts|tsx)|tsconfig.*\.json|package(-lock)?\.json)$
+        pass_filenames: false
       - id: no-env-files
         name: Bloquear archivos .env (los secretos solo viven en .env local)
         entry: Los archivos .env no se versionan; use .env.example

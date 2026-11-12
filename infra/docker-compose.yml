@@ -1,13 +1,11 @@
 # Entorno local de Trulab Viajes (S1-02, docs/architecture.md §12).
 #
 # Uso desde la raíz del repositorio (el `.env` define COMPOSE_FILE=infra/docker-compose.yml):
-#   docker compose up -d                 # base de datos + migraciones + API
-#   docker compose --profile app up -d   # además el frontend (cuando exista S1-05)
+#   docker compose up -d                 # base de datos + migraciones + API + frontend
 # Sin COMPOSE_FILE en el .env:
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d
 #
-# `frontend` está en el perfil `app` hasta que exista su código: S1-05 quita el perfil.
-# (`api` lo tuvo hasta S1-03.)
+# (`api` y `frontend` estuvieron en el perfil `app` hasta que existió su código: S1-03 y S1-05.)
 # Roles de BD (S1-04): `postgres` es solo el superusuario de arranque (crea los roles con
 # infra/db/init/10-roles.sh la primera vez). Las migraciones usan trulab_owner (servicio `migrate`)
 # y la API usa trulab_app, sin privilegios de DDL ni BYPASSRLS.
@@ -102,15 +100,17 @@ services:
       start_period: 20s
 
   frontend:
-    profiles: ["app"]
     build:
       context: ..
       dockerfile: infra/docker/frontend.Dockerfile
       target: dev
     environment:
-      # Vite solo expone VITE_*; el navegador llama a la API por el puerto publicado en localhost.
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+      # Vite solo expone VITE_* al navegador. La SPA llama a `/api/v1` en su propia origen y el
+      # servidor de Vite reenvía `/api` a la API por la red interna (sin CORS en local).
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
       VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+      # Solo para el proxy de Vite (lado servidor); no llega al navegador.
+      API_PROXY_TARGET: http://api:8000
       CHOKIDAR_USEPOLLING: "true"
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-5173}:5173"
@@ -122,6 +122,12 @@ services:
       - trulab
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 networks:
   trulab:

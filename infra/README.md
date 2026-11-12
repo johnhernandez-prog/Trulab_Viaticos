@@ -10,7 +10,7 @@ infra/
 │       └── 10-roles.sh     # roles trulab_owner y trulab_app (S1-04)
 └── docker/
     ├── backend.Dockerfile  # Python 3.12 + librerías de WeasyPrint; etapa `dev`
-    └── frontend.Dockerfile # Node 20 + Vite dev server; etapa `dev`
+    └── frontend.Dockerfile # Node 24 LTS + Vite dev server; etapa `dev`
 ```
 
 ## Entorno local
@@ -20,13 +20,14 @@ infra/
 
 | Comando | Qué levanta |
 | :--- | :--- |
-| `docker compose up -d` | PostgreSQL 16 (`db`) en `127.0.0.1:5433` (5433 para no chocar con un PostgreSQL nativo de Windows), las migraciones (`migrate`, se ejecuta y termina) y la API (`api`, FastAPI con recarga) en `127.0.0.1:8000` |
-| `docker compose --profile app up -d` | Además el `frontend` (Vite, `:5173`) |
+| `docker compose up -d` | PostgreSQL 16 (`db`) en `127.0.0.1:5433` (5433 para no chocar con un PostgreSQL nativo de Windows), las migraciones (`migrate`, se ejecuta y termina), la API (`api`, FastAPI con recarga) en `127.0.0.1:8000` y el frontend (`frontend`, Vite con HMR) en `127.0.0.1:5173` |
 | `docker compose ps` | Estado y salud de los servicios |
 | `docker compose down` | Detiene todo; los datos siguen en los volúmenes |
 | `docker compose down -v` | Detiene y **borra** los volúmenes (BD incluida) |
 
-`frontend` está en el perfil `app` hasta que exista su código (S1-05 quita el perfil). `api` salió del perfil en S1-03.
+Ya no hay perfiles: `api` y `frontend` salieron del perfil `app` en S1-03 y S1-05. La SPA llama a `/api/v1` en su propia origen y Vite reenvía `/api` a `http://api:8000` por la red interna (sin CORS en local; `frontend/README.md`).
+
+**`node_modules` del frontend** vive en el volumen `frontend-node-modules` (binarios de Linux). Al cambiar dependencias: `docker compose exec frontend npm install <paquete>@<versión>` o, si el lock cambió en otra rama, `docker compose run --rm frontend npm ci`.
 
 **Volúmenes:** `pgdata` (BD), `api-storage` (soportes en desarrollo) y `frontend-node-modules`. **Red:** `trulab-viajes`.
 

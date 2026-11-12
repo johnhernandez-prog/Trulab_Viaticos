@@ -8,12 +8,43 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅, S1-02 ✅, S1-03 ✅ y S1-04 ✅ terminadas**; S1-05 a S1-13 pendientes |
-| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; sin tablas de negocio ni frontend |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-04 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-05 ✅ terminadas**; S1-06 a S1-13 pendientes |
+| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; sin tablas de negocio ni pantallas funcionales |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-05 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**S1-05 · Frontend esqueleto.** SPA operativa en el contenedor `frontend` (http://localhost:5173):
+- **Stack con versiones exactas:** React 18.3.1, Vite 6.4.5, TypeScript 5.9.3 (strict, `noUncheckedIndexedAccess`), Tailwind 3.4.19 + `tailwindcss-animate`, shadcn/ui (`components.json`, Radix Slot, CVA, `tailwind-merge` 2), React Router 7.18.5 (modo librería), TanStack Query 5.105.0, Lucide, Inter variable (`@fontsource-variable/inter`). Calidad: ESLint 10.13 (flat config con reglas de tipos, `react-hooks` 7 y `react-refresh`), Prettier 3.9.10, Vitest 3.2.7 + Testing Library + jsdom, `openapi-typescript` 7.13.
+- **Estructura** por funcionalidad (`docs/architecture.md` §2): `src/app` (App con providers, `rutas.tsx`, `ErrorRuta`, `NoEncontradoPage`), `components/ui` (`Button`, `Skeleton`), `components/layout` (`AppShell` mínimo: encabezado de 56 px, salto al contenido, márgenes `px-4/6/8`, máximo 1440 px, *safe area*), `features/inicio` (página principal **temporal** y tarjeta "Estado de la API"), `lib` (`api-client`, `query-client`, `env`, `utils`), `types/api.ts` (**generado** desde OpenAPI) y `test/`.
+- **Rutas:** `/` (inicio) y `*` (no encontrada) dentro de `AppShell`, con `errorElement`.
+- **Comunicación con la API:** `apiClient` (JSON, `credentials: "include"`, problem+json → `ApiError` con `status`, `code`, `requestId` y `errors[]`; sin red → `SIN_CONEXION`). QueryClient sin reintentos en 4xx. La tarjeta de inicio consulta `GET /api/v1/health` con los estados cargando, error con "Reintentar" y datos (un 503 se muestra como "Sin conexión" en la BD).
+- **Tokens del design system** (`docs/design-system.md` §2) como variables CSS HSL en `src/index.css` (`primary`, `secondary`, `muted`, `border`, `input`, `ring`, `success`, `warning`, `destructive`, `info` y sus `-subtle`), expuestos en `tailwind.config.ts`.
+- **Docker:** imagen `node:24.22.1-bookworm-slim`; `frontend` **sale del perfil `app`** (`docker compose up -d` levanta todo); `API_PROXY_TARGET=http://api:8000`; `VITE_API_BASE_URL=/api/v1`; healthcheck con `fetch`.
+- **pre-commit:** hooks locales de Prettier, ESLint y `tsc` (con `frontend/node_modules` del equipo).
+- `.env.example`: `VITE_API_BASE_URL=/api/v1` y nota de que todo `VITE_*` es público.
+- **17 pruebas** (Vitest): `api-client` (URL, cookies, cuerpo JSON, problem+json, sin conexión, error no JSON, 204), `query-client` (política de reintentos) y `rutas` (inicio con API ok, BD caída, sin API con "Reintentar", ruta desconocida).
+- Documentación: `frontend/README.md` (arquitectura, estructura, variables y comandos), `infra/README.md`, este archivo y `CLAUDE.md`.
+
+**Decisiones técnicas de S1-05:**
+- **Node 24 LTS en la imagen del frontend** (antes `node:20.18.0`). Node 20 llegó a fin de soporte en abril de 2026, ESLint 9 ya no tiene soporte y ESLint 10 exige Node ≥ 20.19. Node 24 es la misma versión del equipo (24.22.1), así que la imagen y los hooks locales usan el mismo runtime. `SPRINTS.md` (P-5) dice "Node 20 LTS": no se tocó porque es parte del baseline; **queda para que el dueño lo confirme** (o se registre un ADR).
+- **Líneas mayores elegidas por compatibilidad, no por ser las más nuevas:** React 18 (fijado por la arquitectura, ADR-002), Vite 6 (sigue recibiendo parches; Vite 7+ no aporta nada al esqueleto), Tailwind 3 (tokens HSL en formato shadcn, tal como los describe el design system; Tailwind 4 cambia a configuración en CSS y OKLCH), TypeScript 5.9 (typescript-eslint aún no admite TS 6+). Todas las versiones son exactas y tienen al menos 14 días; `jest-dom` 6.10 se evitó porque está marcada como *deprecated*.
+- **Misma origen con el proxy de Vite** (`/api` → `api:8000`) en lugar de CORS. Evita CORS en local, deja la cookie de refresh (S1-08) como de primera parte con `SameSite=Strict` y no cambia el backend. CORS solo hará falta si en producción la SPA y la API quedan en orígenes distintos (DP-05).
+- **Tipos generados desde OpenAPI y versionados** (`src/types/api.ts`, excluido de ESLint y Prettier). Se regeneran con `docker compose exec frontend npm run gen:api`.
+- **React Router en modo librería** (`createBrowserRouter` + tabla `rutas.tsx`), no en modo framework: la SPA es estática y no hay SSR.
+- **Inter empaquetada** (sin Google Fonts ni CDN): no hay peticiones a terceros y funciona sin conexión al CDN.
+- **Fuera de alcance, a propósito:** login con Google, AuthProvider y guardas (S1-08, S1-11), AppShell responsivo con BottomBar/Sidebar y menú por rol (S1-11), pantallas de negocio, React Hook Form, Zod y Recharts (se instalan cuando se usen), formatos COP y fechas (con la primera pantalla que los muestre) y CORS en la API.
+
+**Validaciones de S1-05 (con un `.env` temporal, luego eliminado):**
+- `docker compose build frontend` correcto. `docker compose up -d` desde cero levanta `db`, `migrate` (termina con 0), `api` y `frontend`, todos *healthy*, sin perfiles.
+- Desde Windows: `http://127.0.0.1:5173/` → 200 HTML; `/legalizaciones/123` → 200 (respaldo de rutas del cliente); `http://127.0.0.1:5173/api/v1/health` → 200 `{"status":"ok","version":"0.1.0","db":"ok"}` con `X-Request-ID` a través del proxy; `/api/v1/docs` → 200 por el proxy.
+- **Navegador:** Edge *headless* ejecutó la SPA. El DOM muestra "Estado de la API · Disponible · Conectada · 0.1.0" y `/no-existe` muestra "Página no encontrada". Capturas a 1280 px y a 360 px sin desbordamiento horizontal.
+- HMR: un cambio en un archivo montado desde Windows generó `hmr update` (polling).
+- `npm run gen:api` generó `src/types/api.ts` desde la API real.
+- En el contenedor (Node 24.22.1): `lint` (0 advertencias), `typecheck`, `format:check`, **17/17 pruebas** y `build` (JS 311,7 kB, 100,9 kB gzip) en verde. En Windows (`npm ci` en `frontend/`): lo mismo, en verde.
+- `pre-commit run --all-files`: todo en verde, incluidos los 3 hooks nuevos. El hook de ESLint se probó con un archivo con `any`: falla como debe (el archivo se eliminó).
+- Limpieza: `docker compose down -v`, `.env` temporal y `dist/` eliminados.
 
 **S1-04 · Persistencia: Alembic, roles y extensiones.**
 - **Alembic** en `backend/`: `alembic.ini` (archivos `AAAAMMDD_HHMM_<descripcion>`, hooks de ruff), `alembic/env.py` (conexión solo con `DATABASE_URL_MIGRATIONS`, `compare_type`, `compare_server_default`, una transacción por migración, modo `--sql`, descubrimiento automático de `app/modules/<dominio>/models.py`) y `alembic/script.py.mako` (tipado para mypy strict).
@@ -136,19 +167,21 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-02** Docker Compose local: PostgreSQL 16, API y frontend (perfil `app`), red y volúmenes
 - [x] **S1-03** Backend esqueleto: FastAPI, config, db, health, problem+json, X-Request-ID, logs JSON; 13 pruebas
 - [x] **S1-04** Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, extensiones `citext`/`pgcrypto`, servicio `migrate`; 28 pruebas
+- [x] **S1-05** Frontend esqueleto: Vite, React 18, TS, Tailwind, shadcn/ui, tokens, React Router, TanStack Query, `apiClient`, tipos desde OpenAPI; contenedor `frontend` sin perfil (Node 24); 17 pruebas
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-05 a S1-13
+- [ ] Sprint 1: S1-06 a S1-13
+- [ ] Confirmar Node 24 LTS en lugar de Node 20 (P-5 de `SPRINTS.md`), decidido en S1-05
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
 - [ ] Semanas 2 a 4
 
 ## Próxima tarea sugerida
 
-**S1-05** · Frontend esqueleto (Vite, React, TS, Tailwind, shadcn/ui, tokens, React Router, TanStack Query, `apiClient`; 4 h, solo depende de S1-01; skills `agent-skills:frontend-ui-engineering`, `design:design-system`). Debe quitar el perfil `app` del servicio `frontend`. Alternativa en el backend: **S1-07** (migración `cargos`, `usuarios`, `sesiones`, `auditoria` y seed del primer SUPERADMIN), que ya puede empezar sobre S1-04: modelos en `app/modules/<dominio>/models.py` heredando de `Base`, generar con `docker compose run --rm migrate alembic revision --autogenerate -m "..."` y, en `auditoria`, revocar `UPDATE`/`DELETE` a `trulab_app`. En paralelo, sin bloquear al desarrollador:
+**S1-06** · CI en GitHub Actions (2 h; depende de S1-03 y S1-05, ya cumplidas; skill `agent-skills:ci-cd-and-automation`): backend con ruff, mypy y pytest sobre PostgreSQL de servicio (debe crear los roles con `infra/db/init/10-roles.sh` y ejecutar `alembic upgrade head` con `trulab_owner` antes de las pruebas, y correr también las de `test_migraciones.py`); frontend con Node 24, `npm ci`, `lint`, `typecheck`, `format:check`, `test` y `build`. Alternativa: **S1-07** (migración `cargos`, `usuarios`, `sesiones` y `auditoria`, más el seed del primer SUPERADMIN). En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.

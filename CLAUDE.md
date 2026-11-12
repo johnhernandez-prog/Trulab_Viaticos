@@ -28,9 +28,10 @@ El informe original de auditoría de AppSheet (*INFORME FINAL PARA PROYECTO TRUL
 
 ## Stack
 
-- **Frontend:** React 18 + Vite + TypeScript, Tailwind + shadcn/ui, TanStack Query, React Router, React Hook Form + Zod, Recharts, Lucide.
+- **Frontend:** React 18 + Vite 6 + TypeScript 5.9, Tailwind 3 + shadcn/ui, TanStack Query, React Router, React Hook Form + Zod, Recharts, Lucide.
 - **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (síncrono), Alembic, psycopg 3, WeasyPrint.
 - **Datos:** PostgreSQL 16 con RLS; archivos en un bucket privado compatible con S3 o GCS.
+- **Runtime del frontend:** Node 24 LTS (imagen y equipo; decidido en S1-05 porque Node 20 ya no tiene soporte). Versiones npm exactas.
 - **Herramientas:** Docker Compose, GitHub Actions, ruff, mypy, pytest, ESLint, Vitest, Playwright.
 
 ## Arquitectura en una frase
@@ -92,16 +93,17 @@ Se confirmaron contra la configuración y la estructura real de AppSheet. Solo c
 - **Migraciones solo con Alembic.** Los tipos TS se generan desde OpenAPI; no se escriben a mano.
 - **Git:** rama `main` protegida; ramas `feat/<fase>-<tema>`, `fix/...`; commits convencionales en español (`feat(gastos): subir soporte`).
 - **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día. Un hook de pre-commit bloquea cualquier `.env`.
-- **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml` (genéricos, ruff, mypy); ESLint/Prettier se agregan en S1-05.
-- **Docker local:** `infra/docker-compose.yml`; desde la raíz `docker compose up -d` (gracias a `COMPOSE_FILE` en `.env`) levanta `db`, aplica las migraciones (servicio `migrate`) y arranca `api`. BD en `127.0.0.1:5433` (5432 lo ocupa un PostgreSQL nativo de Windows). Sin MinIO: en local `STORAGE_BACKEND=local`. Detalle en `infra/README.md`.
+- **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml` (genéricos, ruff, mypy); ESLint, Prettier y `tsc` del frontend desde S1-05.
+- **Docker local:** `infra/docker-compose.yml`; desde la raíz `docker compose up -d` (gracias a `COMPOSE_FILE` en `.env`) levanta `db`, aplica las migraciones (servicio `migrate`) y arranca `api` y `frontend` (http://localhost:5173; Vite reenvía `/api` a `api:8000`, sin CORS en local). BD en `127.0.0.1:5433` (5432 lo ocupa un PostgreSQL nativo de Windows). Sin MinIO: en local `STORAGE_BACKEND=local`. Detalle en `infra/README.md`.
 - **Roles de BD (S1-04):** `postgres` = superusuario de arranque (solo init); `trulab_owner` = dueño de la BD, **no** superusuario, ejecuta Alembic (`DATABASE_URL_MIGRATIONS`); `trulab_app` = la API (`DATABASE_URL`), solo DML por privilegios por defecto, sin DDL ni `BYPASSRLS`. Roles en `infra/db/init/10-roles.sh` (idempotente); extensiones y privilegios en Alembic. La API no recibe credenciales de dueño.
+- **Frontend:** comandos con `docker compose exec frontend npm run lint|typecheck|format:check|test|build|gen:api`. Para el editor y pre-commit, `npm ci` en `frontend/` del equipo (el contenedor usa su propio volumen de `node_modules`). `src/types/api.ts` se genera desde OpenAPI (`gen:api`), no se edita. Las llamadas a la API van siempre por `src/lib/api-client.ts`. Detalle en `frontend/README.md`.
 - **Migraciones:** `docker compose run --rm migrate alembic revision --autogenerate -m "..."`; modelos en `app/modules/<dominio>/models.py` heredando de `app.core.models.Base` (con `naming_convention`). Las tablas de solo inserción revocan `UPDATE`/`DELETE` a `trulab_app` en su migración. Reglas y comandos en `backend/README.md`.
 - **Python local = 3.12** (`.python-version`), en `.venv` creado con `py -3.12 -m venv .venv` e instalado con `requirements-dev.txt`. El equipo también tiene Python 3.15 como predeterminado del sistema: **no usarlo** para el proyecto (sin wheels de PyYAML). Usar siempre `.venv\Scripts\python` y `.venv\Scripts\pre-commit`.
 - **Identidad git local:** `John Hernandez <John.Hernandez@trulab.co>`; remote `origin` en GitHub (`johnhernandez-prog/Trulab_Viaticos`).
 
 ## Estado actual
 
-**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 a S1-04 terminadas** (estructura, configuración, Docker Compose, esqueleto del backend: `GET /api/v1/health`, docs en `/api/v1/docs`, problem+json, `X-Request-ID`, logs JSON; y persistencia: Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, `citext` y `pgcrypto`); sin tablas de negocio ni frontend todavía. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
+**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 a S1-05 terminadas** (estructura, configuración, Docker Compose, esqueleto del backend: `GET /api/v1/health`, docs en `/api/v1/docs`, problem+json, `X-Request-ID`, logs JSON; y persistencia: Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, `citext` y `pgcrypto`; y frontend esqueleto con página temporal); sin tablas de negocio ni pantallas funcionales todavía. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
 
 ## Cómo retomar
 
