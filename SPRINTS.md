@@ -19,7 +19,7 @@
 | P-4 | Entregar el logo y la paleta corporativa (DP-08) | Comunicaciones |
 | P-5 | Instalar Docker Desktop, Node 24 LTS (ADR-026; antes Node 20), Python 3.12 y el CLI `gh` en el equipo de desarrollo | Desarrollador |
 | P-6 | **AWS:** cuenta y entorno staging; verificar en **Amazon SES** la identidad del remitente (`AWS_SES_SENDER`) y salir del *sandbox* de SES; crear bucket S3 privado y RDS (DP-05 ✅, ADR-028). Elegir ECS Fargate o App Runner (DP-21) | Dueño del producto / desarrollador |
-| P-7 | **Tarifas:** entregar `calcularGastos.html` y extraer las dos tablas (empleado y prestador, 22 destinos × 6 conceptos) a un CSV validado por el dueño del producto (seed de `tarifas_viaticos`). También `javaScript.html` (proyectos que exigen formato de prestador, p. ej. `P-CONEXI-002`) y la hoja `PROYECTOS` | Dueño del producto / desarrollador |
+| P-7 | ✅ *Valores entregados el 2026-11-12* (`backend/app/modules/catalogos/datos/tarifas_viaticos.csv`; `P-CONEXI-002` exige formato). Pendiente: la hoja `PROYECTOS`. **Tarifas:** entregar `calcularGastos.html` y extraer las dos tablas (empleado y prestador, 22 destinos × 6 conceptos) a un CSV validado por el dueño del producto (seed de `tarifas_viaticos`). También `javaScript.html` (proyectos que exigen formato de prestador, p. ej. `P-CONEXI-002`) y la hoja `PROYECTOS` | Dueño del producto / desarrollador |
 | P-8 | Confirmar para cada usuario operativo actual: `username`, correo de contacto y si es **prestador de servicios** (insumo de S1-10 y del ETL) | Dueño del producto |
 
 ---

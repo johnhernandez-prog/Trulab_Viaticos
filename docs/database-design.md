@@ -158,7 +158,7 @@ Tarifas por **ciudad de destino** y **tipo de vinculación**. Reemplaza las tabl
 
 - `UNIQUE (lower(ciudad), es_prestador_servicios)`: una fila por ciudad y tipo (hasta **44** filas en el seed: 22 × 2).
 - **No se borra:** se desactiva. Cambiar una tarifa **no** altera solicitudes ya creadas: `viatico_trayectos` guarda una instantánea (§2.7).
-- **Seed:** `scripts/` genera un archivo de datos (CSV) extraído de `calcularGastos.html`, que el dueño del producto valida antes de cargarlo. El comando de carga es idempotente (clave: ciudad + tipo). **Los valores no se escriben en el código ni en las migraciones** (DP-14).
+- **Seed:** los valores oficiales (entregados por el dueño del producto el 2026-11-12, extraídos de `calcularGastos.html`) están en **`backend/app/modules/catalogos/datos/tarifas_viaticos.csv`** (44 filas; ver el `README.md` de esa carpeta). La ciudad visible usa la grafía en español (`Bogotá`, `Pichindé Valle`) y el identificador del código legado (`Bogota`, `PichindeValle`) va a `migrado_de`. El comando de carga (S2-01) es idempotente (clave: ciudad + tipo). **Los valores no se escriben en el código ni en las migraciones** (DP-14).
 - **Ciudad = destino de lista cerrada:** la lista de ciudades del selector sale de aquí (filas activas del tipo del viajero). `"Otro"` es una fila más, con su propia tarifa.
 - Cambios auditados: `TARIFA_CREAR`, `TARIFA_EDITAR`, `TARIFA_DESACTIVAR`.
 
