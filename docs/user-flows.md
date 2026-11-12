@@ -1,214 +1,262 @@
 # Flujos de usuario — Trulab Viajes
 
 > Cada flujo indica el actor, la precondición, los pasos, las reglas aplicadas y los caminos alternos.
-> Referencias: reglas RN-xx y supuestos S-xx en `SPEC.md` §8 y §17.3; endpoints en `docs/api-design.md`.
+> Referencias: reglas RN-xx y supuestos S-xx en `SPEC.md` v0.4 (§8 y §17.3); endpoints en `docs/api-design.md`.
+> **Terminología:** el **viático** (`VT-000001`) es la entidad única. Tiene dos **etapas**: `SOLICITUD` (antes del viaje) y `LEGALIZACION` (carga de gastos). "Legalización" designa la etapa; el registro es el mismo.
 
-## Máquina de estados de la legalización (definitiva, DP-13 ✅)
+## Modelo de estados del viático (DP-13 ✅, DP-19 ✅)
 
-La legalización tiene **dos dimensiones independientes**, más un espejo:
+El viático tiene **tres dimensiones independientes** y un espejo:
 
-| Dimensión | Columna | AppSheet | Quién la cambia |
+| Dimensión | Columna | Origen | Quién la cambia |
 | :--- | :--- | :--- | :--- |
-| Operativa | `estado` | `Estado` | Sistema (inicial) · **ADMIN** / SUPERADMIN |
-| Financiera | `estado_financiero` | `Estado_P` | Sistema (inicial) · **FINANCIERO** / SUPERADMIN |
-| Espejo | — (no se almacena) | `Estado legalizacion` = `[Estado]` | — |
+| Etapa | `etapa` (`SOLICITUD` \| `LEGALIZACION`) | Nueva (Apps Script + AppSheet) | Sistema, por la acción *habilitar legalización* (dueño) |
+| Operativa | `estado` | AppSheet `Estado` | Sistema (inicial) · **ADMIN** / SUPERADMIN. Rige en **ambas** etapas |
+| Financiera | `estado_financiero` | AppSheet `Estado_P` | Sistema (inicial) · **FINANCIERO** / SUPERADMIN |
+| Espejo | — | `Estado legalizacion` = `[Estado]` | — |
 
-### Estado operativo (ADMIN)
+### Estado operativo (ADMIN), válido en cada etapa
 
 ```
-                 crear (dueño; el sistema asigna PENDIENTE)
-  (inicio) ─────────────────────────────────▶ PENDIENTE ⛔ ──── aprobar (A/S) ────▶ APROBADO
-                                                │  ▲  ▲                               │
-                          eliminar (dueño, si   │  │  └── devolver (A/S, comentario) ──┘
-                          estado_financiero =   │  │      solo si estado_financiero ∉ {PAGADO, PROCESADO}
-                          PENDIENTE)            │  │
-                                ▼               │  └──── devolver (A/S, comentario): queda PENDIENTE y "Devuelta"
-                          [eliminada]           │
-                                                └──── rechazar (A/S, comentario) ────▶ RECHAZADO (final)
+                 crear (el sistema asigna PENDIENTE)
+  (inicio) ───────────────────────────────▶ PENDIENTE ⛔ ──── aprobar (A/S) ────▶ APROBADO
+                                              │  ▲  ▲                               │
+                        eliminar (dueño, si   │  │  └── devolver (A/S, comentario) ──┘
+                        estado_financiero =   │  │      solo si estado_financiero ∉ {PAGADO, PROCESADO}
+                        PENDIENTE)            │  │      y (en SOLICITUD) la legalización aún no se habilitó
+                              ▼               │  └──── devolver (A/S, comentario): queda PENDIENTE y "Devuelta"
+                        [eliminado]           │
+                                              └──── rechazar (A/S, comentario) ────▶ RECHAZADO (final)
 ```
 
 ### Estado financiero (FINANCIERO)
 
 ```
   PENDIENTE ⌛ ──▶ TRANSFERIDO ──▶ PAGADO ──▶ PROCESADO
-       (FINANCIERO elige el valor; el orden mostrado es el recorrido habitual, supuesto S-03)
-  Regla dura (RN-03): PAGADO y PROCESADO solo si estado = APROBADO y todos los gastos tienen comprobante.
+  (FINANCIERO elige el valor; recorrido habitual, S-03)
+  RN-03: PAGADO y PROCESADO solo si etapa = LEGALIZACION, estado = APROBADO y todos los gastos con comprobante.
 ```
 
-- **Editable por el dueño:** solo con `estado = PENDIENTE` (incluida una legalización devuelta). AppSheet no tiene un paso "enviar" (supuesto S-02).
-- **Recursos propios:** lo marca el viajero al crear (DP-17 ✅). Si es verdadero, el valor transferido es 0 y la empresa reembolsa (RN-14, RN-25).
-- **Valor transferido:** lo registra y modifica **solo FINANCIERO** (y SUPERADMIN) (DP-04 ✅).
-- **Separación de funciones** (DP-18 ✅): ADMIN no toca la dimensión financiera; FINANCIERO no toca la operativa. Nadie aprueba, valida financieramente ni paga su propia legalización; la única excepción es SUPERADMIN, con auditoría (RN-27, regla definitiva).
-- Cada flecha genera un registro en `legalizacion_eventos` (RN-10). Devolver y Rechazar exigen comentario.
+### Diagrama unificado: las dos modalidades (RN-28)
+
+**Modalidad `CON_SOLICITUD`** (pedir viáticos antes del viaje y legalizar después, sobre el mismo `VT-xxxxxx`):
+
+```
+ ETAPA SOLICITUD                                                         ETAPA LEGALIZACIÓN
+ ─────────────────────────────────────────────────────────────────────   ──────────────────────────────────────────
+ estado:      PENDIENTE ──aprobar(A)──▶ APROBADO ─┐                       PENDIENTE ──aprobar(A)──▶ APROBADO ─┐
+                  ▲  └─devolver(A)─┘   └─rechazar(A)▶ RECHAZADO(fin)       ▲  └─devolver(A)─┘  └─rechazar▶ RECHAZADO
+                                                    │                                                           │
+ est. financ.: PENDIENTE ─────────valor asignado y──▶ TRANSFERIDO ────────── (se conserva) ───────────▶ PAGADO ─▶ PROCESADO
+                                  TRANSFERIDO (F)        │                                              (F; RN-03)
+                                                         │
+                          habilitar legalización (dueño) ┘
+          Condición: estado = APROBADO  y, si requiere_gastos_viaje, estado_financiero = TRANSFERIDO
+          Efecto:    etapa → LEGALIZACION · estado → PENDIENTE · estado_financiero y valor_asignado se conservan (S-12)
+```
+
+**Modalidad `LEGALIZACION_DIRECTA`** (gastos ya realizados o recursos propios; flujo de AppSheet):
+
+```
+ ETAPA LEGALIZACIÓN (inicio directo)
+ ─────────────────────────────────────────────────────────────────────────
+ estado:       PENDIENTE ──aprobar(A)──▶ APROBADO          (devolver ↺ / rechazar ▶ RECHAZADO)
+ est. financ.: PENDIENTE ──[valor asignado (F), salvo recursos propios]──▶ TRANSFERIDO ──▶ PAGADO ──▶ PROCESADO
+```
+
+### Tabla de estados y responsables
+
+| Paso | Modalidad | Etapa | `estado` | `estado_financiero` | Responsable | Acción / endpoint |
+| :-- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `CON_SOLICITUD` | `SOLICITUD` | `PENDIENTE` | `PENDIENTE` | VIAJERO | `POST /viaticos` (trayectos, firma, presupuesto calculado) |
+| 2 | `CON_SOLICITUD` | `SOLICITUD` | `APROBADO` / devuelve a `PENDIENTE` / `RECHAZADO` | `PENDIENTE` | ADMIN/SUPERADMIN (no el dueño, RN-27) | `aprobar` · `devolver` · `rechazar`; `gestionar-tiquetes` |
+| 3 | `CON_SOLICITUD` | `SOLICITUD` | `APROBADO` | `TRANSFERIDO` | FINANCIERO/SUPERADMIN | `valor-asignado` y `estado-financiero` |
+| 4 | `CON_SOLICITUD` | `SOLICITUD` → `LEGALIZACION` | `APROBADO` → **`PENDIENTE`** | `TRANSFERIDO` (se conserva) | VIAJERO (dueño) | `habilitar-legalizacion` |
+| 5 | ambas | `LEGALIZACION` | `PENDIENTE` | `PENDIENTE` / `TRANSFERIDO` | VIAJERO | `POST /viaticos` (directa) o continúa; carga gastos con soporte |
+| 6 | ambas | `LEGALIZACION` | `APROBADO` / devuelve / `RECHAZADO` | sin cambio | ADMIN/SUPERADMIN (no el dueño) | `aprobar` · `devolver` · `rechazar` |
+| 7 | ambas | `LEGALIZACION` | `APROBADO` | `PAGADO` → `PROCESADO` | FINANCIERO/SUPERADMIN (no el dueño) | `estado-financiero`; evento `LIQUIDAR` (saldo `> 0` reintegro, `< 0` reembolso) |
+
+- **Editable por el dueño:** la etapa vigente solo con `estado = PENDIENTE` (incluida una devolución). Al habilitar la legalización, la **solicitud queda congelada** (trayectos, presupuesto, firma).
+- **Recursos propios:** solo en `LEGALIZACION_DIRECTA`; transferido = 0 y la empresa reembolsa (RN-14, RN-25).
+- **Valor asignado:** lo registra solo FINANCIERO/SUPERADMIN; el `presupuesto_solicitado` es una referencia sugerida (RN-19).
+- **Separación de funciones** (DP-18) y **sin autoaprobación en ninguna etapa** (RN-27): nadie aprueba, valida financieramente ni liquida su propio viático; solo SUPERADMIN, con auditoría.
+- Cada transición genera un registro en `viatico_eventos` con su etapa (RN-10). Devolver y Rechazar exigen comentario.
 
 ---
 
-## F-01 · Inicio de sesión
+## F-01 · Inicio de sesión (acceso dual, ADR-027)
 
-**Actor:** cualquier usuario. **Precondición:** el usuario existe en Usuarios, está activo y tiene rol (lo creó ADMIN o SUPERADMIN). **Método único:** Google Workspace de Trulab (DP-01 ✅).
+**Actor:** cualquier usuario. **Precondición:** el usuario existe, está activo y tiene rol. **Dos caminos según el rol.**
 
-1. El usuario abre la app y ve la pantalla de login con el logo y el botón **"Ingresar con Google"**. No hay campos de usuario ni contraseña.
-2. Pulsa el botón; Google muestra el selector de cuenta.
-3. Elige su cuenta corporativa de Google Workspace de Trulab. **Google verifica la identidad** y la SPA recibe el ID token.
-4. La SPA envía el token a `POST /auth/google`.
-5. La API valida, en orden: el token, el correo verificado, el dominio de Trulab, que el correo exista en Usuarios, que el usuario esté activo y que tenga rol asignado. Si todo se cumple, emite la sesión.
-6. La SPA carga `/me` y redirige a la **vista inicial del rol**: VIAJERO → Legalizaciones; ADMIN → Revisión (pendientes); FINANCIERO → Pagos; SUPERADMIN → Legalizaciones.
-7. La sesión se renueva sola (refresh) mientras el usuario usa la app; vence a los 7 días sin uso.
+### F-01a · VIAJERO, ADMIN, FINANCIERO: usuario y contraseña
+
+1. La pantalla de login muestra los campos **Usuario** y **Contraseña**, el enlace **"Olvidé mi contraseña"** y, aparte, el botón **"Soy administrador de Trulab: ingresar con Google"**.
+2. Escribe su usuario y su contraseña → `POST /auth/login`.
+3. La API valida usuario existente, activo, con rol operativo y contraseña (Argon2id). Registra `LOGIN_EXITOSO`.
+4. **Primer acceso o contraseña temporal** (`debe_cambiar_password = true`): la SPA lo lleva a **"Cambiar contraseña"** (F-01c) antes de cualquier otra pantalla; mientras no la cambie, la API rechaza el resto de endpoints.
+5. La SPA carga `/me` y redirige a la vista inicial del rol: VIAJERO → Viáticos; ADMIN → Revisión; FINANCIERO → Pagos.
+6. La sesión se renueva sola (refresh); vence a los 7 días sin uso.
 
 **Alternos:**
-- Cuenta de otro dominio: "Use su cuenta corporativa @trulab.co".
-- Correo no registrado, inactivo o sin rol: **acceso denegado**, con el mensaje "Su cuenta no tiene acceso. Contacte al administrador." Queda registrado en la auditoría.
-- **Problemas con la contraseña de la cuenta corporativa:** la app no los gestiona. El colaborador contacta a los administradores de Google Workspace de Trulab. No existen opciones de registro, creación de cuenta, "olvidé mi contraseña" ni cambio de contraseña.
-- **Cerrar sesión:** menú de perfil → "Cerrar sesión" → vuelve al login.
+- Usuario o contraseña incorrectos, usuario inactivo o inexistente: el **mismo** mensaje, "Usuario o contraseña incorrectos" (no revela cuál falló). Se audita `LOGIN_FALLIDO`.
+- 5 fallos seguidos: "Cuenta bloqueada temporalmente. Intente en 15 minutos" (S-14).
+- Un SUPERADMIN que escribe su usuario en este formulario recibe el mismo mensaje genérico; debe usar Google.
+- **Cerrar sesión:** menú de perfil → "Cerrar sesión".
+
+### F-01b · SUPERADMIN: Google `@trulab.co`
+
+1. Pulsa **"Ingresar con Google"**; Google muestra el selector de cuenta.
+2. Elige su cuenta corporativa `@trulab.co`; la SPA recibe el ID token y llama a `POST /auth/google`.
+3. La API valida token, correo verificado, dominio `@trulab.co`, que el correo exista, esté activo y tenga **rol `SUPERADMIN`**.
+4. La SPA carga `/me` y abre Viáticos (todos).
+
+**Alternos:** cuenta de otro dominio ("Use su cuenta corporativa @trulab.co"); correo no registrado o inactivo ("Su cuenta no tiene acceso. Contacte al administrador"), ambos con `ACCESO_DENEGADO`; si el correo pertenece a un usuario operativo: "Use su usuario y contraseña" (`METODO_ACCESO_NO_PERMITIDO`).
+
+### F-01c · Recuperar, restablecer y cambiar la contraseña (RN-15)
+
+**Actor:** VIAJERO, ADMIN, FINANCIERO.
+
+1. **Olvidé mi contraseña** → escribe su usuario o correo → `POST /auth/password/forgot`. La pantalla siempre dice: "Si la cuenta existe, enviaremos un enlace al correo registrado". Se audita `PASSWORD_RECUPERACION_SOLICITADA`.
+2. Si el usuario existe, está activo y es operativo, recibe un correo (Amazon SES; en local, el correo aparece en el log del backend) con un enlace de **un solo uso** que vence en 15–30 min.
+3. El enlace abre **"Nueva contraseña"** → `POST /auth/password/reset`. La política exige 12+ caracteres. Al guardar: se invalidan el token y todas las sesiones, y se pide iniciar sesión (`PASSWORD_CAMBIADA`).
+4. **Cambio voluntario u obligatorio:** menú de perfil → "Cambiar contraseña" (contraseña actual + nueva) → `POST /auth/password/change`. Se cierran las demás sesiones.
+
+**Alternos:** enlace vencido, usado o inválido: "El enlace no es válido o venció. Solicite uno nuevo" (mensaje único, `TOKEN_INVALIDO`). Si el correo del usuario es incorrecto, ADMIN lo corrige y usa "Restablecer contraseña" (F-02). SUPERADMIN no tiene esta opción: sus credenciales las gestiona Google Workspace.
 
 ---
 
 ## F-02 · Gestión de usuarios
 
-**Actor:** ADMIN o SUPERADMIN.
+**Actor:** ADMIN o SUPERADMIN (operativos); solo SUPERADMIN para otros SUPERADMIN.
 
-1. Menú → **Usuarios**. Se ve la tabla (escritorio) o las tarjetas (móvil) con nombre, rol, cargo, célula, correo y estado.
-2. Puede buscar por nombre o correo y filtrar por rol, cargo, célula o activo.
-3. **Crear:** botón "+ Nuevo usuario" → formulario con nombre completo, correo corporativo de Google Workspace, cédula, célula (catálogo), rol y cargo → Guardar. Desde ese momento el colaborador puede entrar con Google; no se envían contraseñas.
-   - Validación: correo único y del dominio (RN-12). Un ADMIN no ve la opción `SUPERADMIN`.
-4. **Editar:** clic en la fila → detalle → "Editar" → cambiar los campos → Guardar.
-   - Si cambia el **rol**, aparece la confirmación "El usuario deberá volver a iniciar sesión". Se audita.
-5. **Desactivar:** menú `⋯` → "Desactivar" → confirmación. El usuario ya no puede ingresar y su historial se conserva (RN-11).
-6. **Reactivar:** filtro "Inactivos" → `⋯` → "Activar".
+1. Menú → **Usuarios**: tabla (escritorio) o tarjetas (móvil) con nombre, usuario, rol, cargo, célula, correo, tipo de vinculación y estado. Búsqueda por nombre/correo/usuario y filtros por rol, cargo, célula, vinculación o activo.
+2. **Crear usuario operativo:** "+ Nuevo usuario" → nombre completo, **correo de contacto** (personal o corporativo), **usuario**, cédula, célula, cargo, rol (VIAJERO/ADMIN/FINANCIERO), **¿es prestador de servicios?** y fecha de nacimiento (opcional) → Guardar. El sistema genera una **contraseña temporal** y la envía **por correo** al usuario; ADMIN no la ve. El usuario deberá cambiarla en su primer acceso (S-13).
+3. **Crear o promover un SUPERADMIN** (solo SUPERADMIN): "+ Nuevo superadministrador" (o "Promover a superadministrador" en un usuario existente) → exige correo **`@trulab.co`**. No lleva usuario ni contraseña: ingresará con Google. Confirmación: "Tendrá acceso total". Se audita `SUPERADMIN_ASIGNADO`. ADMIN no ve estas opciones.
+4. **Editar:** clic en la fila → "Editar". Si cambia el **rol**, se avisa "El usuario deberá volver a iniciar sesión". Promover a SUPERADMIN elimina su usuario y contraseña; degradar a un SUPERADMIN pide un usuario y genera una contraseña temporal.
+5. **Restablecer contraseña** (operativos): `⋯` → "Restablecer contraseña" → se envía una temporal nueva por correo y se cierran sus sesiones.
+6. **Desactivar / Reactivar:** `⋯`. El usuario inactivo no puede ingresar por ningún método y su historial se conserva (RN-11).
 
-**Alternos:** no puede desactivarse a sí mismo; no puede desactivar ni degradar al último SUPERADMIN.
+**Alternos:** no puede desactivarse a sí mismo; **no se puede desactivar ni degradar al último SUPERADMIN activo** ("Debe existir al menos un superadministrador activo", `409`).
 
 ---
 
-## F-03 · Gestión de cargos y catálogos
+## F-03 · Gestión de cargos, catálogos y tarifas
 
-**F-03a · Cargos.** **Actor:** ADMIN o SUPERADMIN (FINANCIERO solo consulta).
+**F-03a · Cargos.** **Actor:** ADMIN o SUPERADMIN (FINANCIERO solo consulta). Lista con folio `CA-`, crear, editar y eliminar (409 si tiene usuarios).
 
-1. Menú → **Cargos**. Se ve la lista con folio (`CA-000001`), nombre y cantidad de usuarios.
-2. **Crear:** "+ Añadir" → nombre (y descripción opcional) → Guardar. El sistema asigna el folio (RN-04).
-3. **Editar:** clic → editar el nombre o la descripción → Guardar.
-4. **Eliminar:** `⋯` → "Eliminar" → confirmación.
-   - Si tiene usuarios asignados, aparece "No se puede eliminar: 4 usuarios tienen este cargo" (409).
+**F-03b · Catálogos (proyectos, rubros, células).** **Actor:** solo SUPERADMIN. Pestañas con nombre, estado y cantidad de usos; crear, renombrar (se audita), desactivar/activar (sin eliminar). En **Proyectos**, además: *código* y la casilla **"Exige formato de prestador"** (RN-33).
 
-**F-03b · Catálogos (proyectos, rubros, células).** **Actor:** solo SUPERADMIN (DP-14 ✅).
+**F-03c · Tarifas de viáticos.** **Actor:** solo SUPERADMIN (FINANCIERO y ADMIN consultan) (RF-018).
 
-1. Menú → **Catálogos** → pestañas Proyectos · Rubros · Células. Cada fila muestra nombre, estado (activo/inactivo) y cuántos registros lo usan.
-2. **Crear:** "+ Añadir" → nombre → Guardar. Un nombre repetido (sin distinguir mayúsculas) muestra "Ya existe".
-3. **Renombrar:** clic → editar → Guardar. El cambio se refleja en todos los registros que lo usan y se audita.
-4. **Desactivar / Activar:** `⋯` → "Desactivar". El valor deja de aparecer en los selectores, pero los gastos y usuarios que ya lo tienen lo conservan (RN-24). No hay opción de eliminar.
-
-> Para el viajero y el ADMIN la experiencia es la misma que en AppSheet: eligen proyecto, rubro y célula de una lista desplegable. Que la lista venga de una tabla maestra es un detalle interno.
+1. Menú → **Catálogos** → pestaña **Tarifas de viáticos**. La tabla muestra ciudad, tipo (**Empleado** / **Prestador**) y los 6 valores: alimentación/día, otros gastos/día, transporte aeropuerto, transporte intermunicipal, transporte interno (1 día) y transporte interno (varios días).
+2. Filtros por ciudad, tipo y activo.
+3. **Crear:** "+ Añadir tarifa" → ciudad, tipo y los 6 valores → Guardar. Una combinación ciudad + tipo repetida muestra "Ya existe".
+4. **Editar:** cambia los valores; aparece "Las solicitudes ya creadas conservan las tarifas con las que se calcularon". Se audita (`TARIFA_EDITAR`).
+5. **Desactivar / Activar:** deja de ofrecerse la ciudad al solicitar; no se elimina.
 
 ---
 
-## F-04 · Crear una legalización
+## F-04 · Crear un viático (elección de modalidad)
 
-**Actor:** cualquier rol (normalmente VIAJERO), siempre sobre una legalización propia.
+**Actor:** cualquier rol (normalmente VIAJERO), siempre sobre un viático propio.
 
-1. **Legalizaciones** → FAB **"+"** (móvil) o "+ Nueva legalización" (escritorio).
-2. Se muestran, **solo lectura**, los datos del colaborador tomados de su usuario: nombre, cargo, cédula y célula (RN-17; equivale a `LOOKUP(USEREMAIL())`).
-3. Formulario (una columna en móvil):
-   - Motivo del viaje (obligatorio)
-   - ¿Viajó con **recursos propios**? (Sí/No). Lo decide el viajero en este momento (DP-17 ✅). Texto de ayuda: "Si pagó el viaje con su dinero, la empresa le reembolsará el total de los gastos".
-   - La fecha de legalización se asigna automáticamente. No hay fechas de viaje (DP-16 ✅).
-   - El **proyecto no se elige aquí**: se asigna en cada gasto (DP-02 ✅).
-4. Guardar. El sistema crea la legalización con estado **PENDIENTE** y estado financiero **PENDIENTE** (DP-13 ✅) y le asigna el folio `LG-xxxxxx`.
-5. La app abre el **detalle** de la legalización con la sección "Gastos" vacía y un CTA para agregar el primer gasto.
-6. El valor transferido se muestra así: con recursos propios, "Recursos propios: $0 (a reembolsar)"; si no, "Pendiente de registrar por Financiero" mientras FINANCIERO no lo registre (DP-04 ✅).
+1. **Viáticos** → FAB **"+"** / "+ Nuevo viático". Se pregunta: **"¿Qué desea hacer?"**
+   - **Pedir viáticos y tiquetes antes del viaje** → `CON_SOLICITUD` (F-04a).
+   - **Cargar facturas y soportes de un viaje ya realizado** (o con recursos propios) → `LEGALIZACION_DIRECTA` (F-04b).
+2. Se muestran, en solo lectura, los datos del colaborador tomados de su usuario: nombre, cargo, cédula, célula y tipo de vinculación (RN-17).
 
-**Alternos:** si cierra antes de guardar, el formulario pregunta "¿Descartar cambios?". Puede editar el motivo mientras esté PENDIENTE, y corregir "recursos propios" mientras además el estado financiero siga PENDIENTE (supuesto S-05).
+### F-04a · Solicitud de viáticos y tiquetes (`CON_SOLICITUD`)
+
+1. **Datos generales:** proyecto (lista), líder de proyecto, empresa (opcional), motivo del viaje.
+2. **Opciones:** ☐ *Requiere tiquete* · ☐ *Requiere gastos de viaje*. Si marca tiquete y no tiene fecha de nacimiento en su perfil, el formulario la pide y la guarda (RN-31). Sin gastos de viaje, se omite el presupuesto (S-09).
+3. **Trayectos (1 a 5):** "+ Agregar trayecto" → ciudad de origen, ciudad de destino (no puede ser igual al origen salvo "Otro"), fecha y hora de ida y de regreso, ¿requiere hospedaje? y **días de estadía**, que se sugieren como `ceil(regreso − ida) + 1` y se pueden editar (RN-30).
+4. **Presupuesto calculado:** al completar un trayecto, la pantalla llama a `calcular-presupuesto` y muestra el desglose (alimentación, transporte interno, otros gastos × días + transporte aeropuerto + intermunicipal) y el **total**. Los importes **no son editables**; si necesita más dinero, lo justifica en **Comentarios** con la autorización del líder de proyecto (RN-29).
+5. **Prestador con proyecto que exige formato** (RN-33): no se muestra el cálculo; en su lugar aparece **"Adjuntar formato diligenciado (PDF o Excel)"**, obligatorio.
+6. **Firma** (RN-32): dibuja o sube su firma, o usa la guardada en su perfil.
+7. Guardar. Se crea el viático `VT-xxxxxx` en etapa **SOLICITUD**, `estado = PENDIENTE`, `estado_financiero = PENDIENTE`. Puede editarlo mientras siga `PENDIENTE`.
+8. Desde el detalle puede **Descargar PDF de solicitud** (incluye la firma).
+
+**Alternos:** si cierra antes de guardar, "¿Descartar cambios?". Si falta algo para aprobar (firma, formato, fecha de nacimiento), el detalle muestra la lista de pendientes.
+
+### F-04b · Legalización directa (`LEGALIZACION_DIRECTA`)
+
+1. Formulario: motivo del viaje y **¿Viajó con recursos propios?** (Sí/No). Ayuda: "Si pagó el viaje con su dinero, la empresa le reembolsará el total de los gastos" (DP-17).
+2. Guardar: el viático nace en etapa **LEGALIZACIÓN**, `PENDIENTE`/`PENDIENTE`, con folio `VT-xxxxxx`.
+3. Se abre el detalle con la sección "Gastos" vacía y el CTA para agregar el primero (F-05).
+4. Valor transferido: con recursos propios, "Recursos propios: $0 (a reembolsar)"; si no, "Pendiente de registrar por Financiero".
 
 ---
 
 ## F-05 · Registrar un gasto
 
-**Actor:** dueño de la legalización, con estado PENDIENTE.
+**Actor:** dueño, con el viático en **etapa LEGALIZACIÓN** y estado `PENDIENTE`. (En etapa SOLICITUD no hay gastos.)
 
-1. En el detalle de la legalización → **"+ Agregar gasto"**. En móvil se abre un Sheet inferior.
-2. **Comprobante primero** (el orden favorece la captura en campo). Debe haber **al menos uno** de los dos (DP-15 ✅):
-   - **Soporte (imagen):** "Tomar foto" abre la cámara trasera, o "Elegir imagen". Se muestra la miniatura; la imagen se comprime en el cliente.
-   - **Archivo (PDF):** "Adjuntar PDF" para facturas electrónicas o documentos digitales.
-3. Datos (equivalen a `Registro_Gastos`):
-   - Fecha de factura (por defecto hoy; no puede ser futura)
-   - **Rubro** (catálogo; por ejemplo Hospedaje, Alimentación, Transporte, Combustible, Peajes)
-   - **Proyecto** (catálogo; por ejemplo "Rutas PDET 3", "Conexión Agro", "Taller Multipropósito")
-   - Concepto (por ejemplo "Taxi aeropuerto")
-   - CC/NIT y empresa del proveedor
-   - Valor ($)
-   - Observaciones (opcional)
-4. Guardar. Se ve una barra de progreso de subida y luego un toast "Gasto guardado".
-5. El detalle se actualiza: el gasto aparece en la lista y el **total gastado** y el **saldo** se recalculan.
-6. Para agregar otro, se repite el flujo (el Sheet ofrece "Guardar y agregar otro").
+1. En el detalle → **"+ Agregar gasto"** (Sheet inferior en móvil).
+2. **Comprobante primero.** Debe haber **al menos uno** (DP-15): **Soporte (imagen)** — "Tomar foto" o "Elegir imagen", comprimida en el cliente — o **Archivo (PDF)**.
+3. Datos: fecha de factura (no futura), **rubro**, **proyecto**, concepto, CC/NIT y empresa del proveedor, valor, observaciones.
+4. Guardar: progreso de subida y toast "Gasto guardado".
+5. El detalle recalcula el total gastado y el saldo. "Guardar y agregar otro" repite el flujo.
 
-**Alternos:**
-- Sin soporte ni archivo: se permite guardar, pero el gasto queda marcado "Falta comprobante" (en `warning`) y **la legalización no puede continuar**: ADMIN no podrá aprobarla (RN-21, supuesto S-04).
-- PDF elegido como soporte, o imagen como archivo: error en línea "El soporte debe ser una imagen" / "El archivo debe ser un PDF" (RN-13).
-- Archivo de más de 10 MB o de tipo no permitido: error en línea (RN-13).
-- Fecha de factura futura: error en línea (RN-07).
-- Sin conexión o subida fallida: "No se pudo subir. Reintentar". Los datos del formulario se conservan.
-- **Editar o eliminar** un gasto: en la tarjeta, `⋯` → Editar / Reemplazar soporte / Reemplazar archivo / Eliminar (con confirmación).
+**Alternos:** sin soporte ni archivo se puede guardar, pero queda "Falta comprobante" y la legalización no puede aprobarse (RN-21); PDF como soporte o imagen como archivo: error en línea (RN-13); archivo > 10 MB o de tipo no permitido; fecha futura (RN-07); fallo de subida: "Reintentar" conservando los datos. Editar, reemplazar o eliminar desde `⋯`.
 
 ---
 
 ## F-06 · Revisión operativa: aprobar, devolver o rechazar
 
-**Actor:** ADMIN (o SUPERADMIN) (DP-13 ✅, DP-18 ✅). **Precondición:** legalización ajena con estado PENDIENTE (o APROBADO para devolver).
+**Actor:** ADMIN (o SUPERADMIN). **Precondición:** viático **ajeno** (RN-27) con `estado = PENDIENTE` (o `APROBADO` para devolver), en cualquiera de las dos etapas.
 
-1. Menú → **Revisión**. Por defecto aparecen las legalizaciones **PENDIENTES** con al menos un gasto, ordenadas por fecha; un indicador muestra cuántos gastos tienen comprobante.
-2. Clic en una fila abre el **detalle**:
-   - Datos del colaborador y motivo
-   - Lista de gastos; cada soporte o archivo se abre en un visor (imagen ampliable o PDF) con URL temporal
-   - Checklist: ✅ al menos un gasto · ✅ todos los gastos con soporte o archivo
-   - Resumen de saldo (solo lectura) e historial
-3. ADMIN **revisa los comprobantes** y el **cumplimiento de políticas**, y decide:
-   - **Aprobar** → confirmación "¿Aprobar LG-000123?" → el estado pasa a **APROBADO**; el dueño ya no puede editar (RN-06). El botón queda deshabilitado, con el motivo visible, si el checklist no está completo.
-   - **Devolver** → comentario obligatorio ("El soporte del hotel es ilegible") → la legalización sigue **PENDIENTE**, marcada **"Devuelta"**; el viajero ve el comentario en una alerta en su detalle y corrige (vuelve a F-05). ADMIN también puede devolver una legalización **APROBADA** mientras no esté pagada ni procesada.
-   - **Rechazar** → comentario obligatorio → el estado pasa a **RECHAZADO** (final).
-4. (Si DP-06 aplica) El viajero recibe un correo.
+1. Menú → **Revisión**: viáticos `PENDIENTE` de ambas etapas, con filtro por etapa; un indicador muestra el avance (solicitudes completas, gastos con comprobante).
+2. El detalle depende de la etapa:
+   - **Solicitud:** datos del colaborador, proyecto, líder, trayectos, **presupuesto calculado** (o formato adjunto del prestador), firma, tiquetes y comentarios. Checklist: ✅ trayectos válidos · ✅ presupuesto o formato · ✅ firma · ✅ fecha de nacimiento si hay tiquete.
+   - **Legalización:** gastos con soportes en visor (URL temporal), checklist ✅ al menos un gasto · ✅ todos con comprobante, saldo en solo lectura e historial.
+3. ADMIN revisa y decide:
+   - **Aprobar** → confirmación → `APROBADO`; el dueño ya no edita esa etapa (RN-06). Deshabilitado, con el motivo, si el checklist no está completo.
+   - **Devolver** → comentario obligatorio → sigue `PENDIENTE` y "Devuelta"; el viajero corrige. En `APROBADO` solo mientras no esté pagado/procesado (y, en solicitud, antes de habilitar la legalización) (RN-20).
+   - **Rechazar** → comentario obligatorio → `RECHAZADO` (final).
+4. **Gestionar tiquetes** (solicitud con `requiere_tiquete`): ADMIN registra la emisión con un comentario (S-10).
+5. (Si DP-06 aplica) el viajero recibe un correo.
 
-**Reglas:** ADMIN no ve los botones de valor transferido ni de estado financiero (RN-26). Nadie modifica los gastos del viajero (DP-12). ADMIN no revisa sus propias legalizaciones (RN-27).
-
-**Alternos:** si el servidor detecta al aprobar que falta un comprobante (por concurrencia), responde 409 y la UI muestra qué gastos fallan.
+**Reglas:** ADMIN no ve los botones de valor asignado ni de estado financiero (RN-26). Nadie modifica los gastos ni la solicitud del viajero (DP-12). ADMIN no revisa los suyos (RN-27). **Alterno:** 409 si cambió por concurrencia; la UI muestra qué falta.
 
 ---
 
-## F-07 · Gestión financiera: valor transferido
+## F-07 · Gestión financiera: valor asignado
 
-**Actor:** FINANCIERO (o SUPERADMIN) (DP-04 ✅). **Precondición:** legalización ajena no rechazada.
+**Actor:** FINANCIERO (o SUPERADMIN). **Precondición:** viático **ajeno** no rechazado.
 
-1. Menú → **Pagos**. Por defecto aparecen las legalizaciones **APROBADAS** con estado financiero PENDIENTE o TRANSFERIDO, ordenadas por fecha.
-2. Filtra por viajero, proyecto, fechas, estado financiero o signo del saldo. El resumen superior muestra los totales a reembolsar y a reintegrar.
-3. En el detalle → **"Registrar valor transferido"** → ingresa el monto asignado (`Valor_T`) → Guardar. El sistema recalcula el valor transferido (0 si hay recursos propios, RN-14) y el saldo, y registra un evento con el valor anterior y el nuevo. Puede hacerlo también como anticipo, mientras la legalización esté PENDIENTE.
-4. Si hizo el desembolso, cambia el estado financiero a **TRANSFERIDO** (F-08).
+1. Menú → **Pagos**. Por defecto: solicitudes `APROBADO` por desembolsar y legalizaciones `APROBADO` con estado financiero `PENDIENTE`/`TRANSFERIDO`. Filtros por viajero, proyecto, etapa, modalidad, fechas, estado financiero y signo del saldo; resumen con totales a reembolsar y reintegrar.
+2. En una **solicitud aprobada** → **"Registrar valor asignado"**: la pantalla muestra el **presupuesto solicitado como referencia** (o el formato adjunto si es prestador) → ingresa el monto (`Valor_T`) → Guardar. Queda el evento con el valor anterior y el nuevo.
+3. Tras el desembolso (banca, fuera del sistema), cambia el estado financiero a **TRANSFERIDO** (F-08). Con eso el viajero puede habilitar la legalización (F-12).
+4. En una **legalización directa** sin recursos propios puede registrar el valor asignado como anticipo mientras esté `PENDIENTE`.
 
-**Reglas:** FINANCIERO no aprueba, devuelve ni rechaza (RN-26); si encuentra un problema en los comprobantes, se lo indica a ADMIN. No edita los gastos del viajero (DP-12).
+**Reglas:** FINANCIERO no aprueba, devuelve ni rechaza (RN-26); no edita gastos ni solicitudes (DP-12); no registra el valor de su propio viático (RN-27).
 
 ---
 
 ## F-08 · Estado financiero y liquidación
 
-**Actor:** FINANCIERO (o SUPERADMIN) (DP-13 ✅, DP-18 ✅).
+**Actor:** FINANCIERO (o SUPERADMIN).
 
-1. Hace la transferencia, el reembolso o recibe el reintegro fuera del sistema (banca).
-2. En el detalle → **"Cambiar estado financiero"** → elige `Transferido`, `Pagado` o `Procesado` y agrega una observación opcional (por ejemplo, la referencia de la transferencia).
-3. Para **Pagado** o **Procesado** la confirmación muestra el resumen: "LG-000123 · Ana Pérez · Saldo −$120.000 (a reembolsar). ¿Confirmar?". Solo está disponible si la legalización está **APROBADA** y todos sus gastos tienen comprobante (RN-03).
-4. Confirmar. Se actualiza el estado financiero, se registran `estado_financiero_at` y el evento, y, si es Pagado o Procesado, la fila sale del filtro por defecto de Pagos.
-5. Toast "Estado financiero actualizado".
+1. Hace la transferencia, el reembolso o recibe el reintegro fuera del sistema.
+2. En el detalle → **"Cambiar estado financiero"** → `Transferido`, `Pagado` o `Procesado` + observación opcional (referencia de la transferencia).
+3. **Pagado/Procesado** solo en etapa **LEGALIZACIÓN**, `APROBADO` y con todos los comprobantes (RN-03). La confirmación muestra: "VT-000123 · Ana Pérez · Saldo −$120.000 (a reembolsar). ¿Confirmar?". `saldo > 0` = el viajero reintegra; `saldo < 0` = la empresa reembolsa.
+4. Se registran `estado_financiero_at`, el evento de cambio y el evento `LIQUIDAR` con el sentido del saldo. La fila sale del filtro por defecto de Pagos.
 
-**Alternos:** si ADMIN la devolvió al mismo tiempo, el servidor responde 409 "La legalización ya cambió de estado" y la vista se recarga. Con recursos propios, el saldo es −total gastado: la empresa reembolsa todo (RN-25).
+**Alternos:** si ADMIN la devolvió al mismo tiempo, 409 y se recarga. Con recursos propios, el saldo es −total gastado (RN-25).
 
 ---
 
-## F-09 · Generar el PDF
+## F-09 · Generar los PDF
 
-**Actor:** el dueño (las suyas), o FINANCIERO, ADMIN y SUPERADMIN (todas).
+**Actor:** el dueño (los suyos), o FINANCIERO, ADMIN y SUPERADMIN (todos).
 
-1. En el detalle de cualquier legalización → **"Descargar PDF"** (botón secundario, o `⋯` en móvil).
-2. El botón muestra "Generando…".
-3. Se descarga `LG-000123.pdf` con el encabezado corporativo, los datos del colaborador, el motivo, la tabla de gastos (con rubro y proyecto), los totales, el saldo, los dos estados, el historial y las miniaturas de los soportes de imagen.
-4. En móvil se abre con el visor del sistema y se puede compartir.
+- **PDF de solicitud** (`CON_SOLICITUD`, desde el detalle): encabezado corporativo, folio, datos del colaborador, proyecto, líder, trayectos, presupuesto con desglose (o referencia al formato adjunto), tiquetes, comentarios, **firma del solicitante** y estado. Requiere la firma (RN-32).
+- **PDF de legalización** (etapa LEGALIZACIÓN): colaborador, motivo, tabla de gastos (rubro, proyecto, valor), totales, saldo, ambos estados, historial y miniaturas de los soportes de imagen.
 
-**Alternos:** si falla la generación, aparece "No se pudo generar el PDF. Reintentar" (con `request_id` en el log).
+1. Detalle → **"Descargar PDF de solicitud"** / **"Descargar PDF de legalización"** (secundarios; `⋯` en móvil).
+2. El botón muestra "Generando…" y se descarga `VT-000123-solicitud.pdf` o `VT-000123-legalizacion.pdf`.
+
+**Alternos:** "No se pudo generar el PDF. Reintentar" (con `request_id`).
 
 ---
 
@@ -216,18 +264,11 @@ La legalización tiene **dos dimensiones independientes**, más un espejo:
 
 **Actor:** FINANCIERO, ADMIN o SUPERADMIN.
 
-1. Menú → **Indicadores**.
-2. Filtros:
-   - **Fecha inicio y fecha fin**, que equivalen al `Segmentador` de AppSheet (DP-02 ✅) y se aplican sobre la **fecha de factura** de los gastos (DP-16 ✅). Por defecto el mes actual, con atajos "Este mes", "Trimestre" y "Año".
-   - Proyecto (opcional).
-3. Se ven:
-   - (Opcional MVP) KPIs: total transferido, total gastado, por reembolsar, por reintegrar, pendientes de aprobación y pendientes de pago.
-   - **Barras:** consumo por proyecto (suma de los gastos de cada proyecto con fecha de factura en el rango), de mayor a menor.
-   - **Dona:** cantidad de legalizaciones por estado operativo (supuesto S-07).
-4. Clic en una barra o segmento abre la lista de legalizaciones filtrada (Pagos o Legalizaciones con ese proyecto o estado).
-5. "Ver como tabla" ofrece la versión accesible de cada gráfico.
+1. Menú → **Indicadores**. Filtros: **fecha inicio y fin** (el Segmentador), aplicados sobre la **fecha de factura** de los gastos (DP-16), por defecto el mes actual con atajos; proyecto opcional.
+2. Se ven (opcional MVP) KPIs; **barras** del consumo por proyecto y **dona** de viáticos por estado operativo (S-07).
+3. Clic en una barra o segmento abre la lista filtrada. "Ver como tabla" es la alternativa accesible.
 
-**Alternos:** si no hay datos en el rango, aparece "No hay gastos en este período" con un botón para ampliar el rango.
+**Alterno:** sin datos, "No hay gastos en este período" con botón para ampliar el rango.
 
 ---
 
@@ -235,9 +276,22 @@ La legalización tiene **dos dimensiones independientes**, más un espejo:
 
 | Rol | Menú visible | Vista inicial |
 | :--- | :--- | :--- |
-| VIAJERO | Legalizaciones · Perfil | Legalizaciones (propias) |
-| ADMIN | Legalizaciones · Revisión · Pagos (lectura) · Indicadores · Cargos · Usuarios | Revisión (pendientes) |
-| FINANCIERO | Legalizaciones · Pagos · Indicadores · Cargos (lectura) | Pagos |
-| SUPERADMIN | Todo lo anterior + Catálogos (+ Auditoría, post-MVP) | Legalizaciones (todas) |
+| VIAJERO | Viáticos · Perfil (firma, fecha de nacimiento, contraseña) | Viáticos (propios) |
+| ADMIN | Viáticos · Revisión · Pagos (lectura) · Indicadores · Cargos · Usuarios | Revisión (pendientes) |
+| FINANCIERO | Viáticos · Pagos · Indicadores · Cargos (lectura) · Tarifas (lectura) | Pagos |
+| SUPERADMIN | Todo lo anterior + Catálogos y Tarifas (edición) + Superadministradores (+ Auditoría, post-MVP) | Viáticos (todos) |
 
-Para roles con acceso global, **Legalizaciones** tiene un selector "Mías / Todas". "Revisión" es la lista de legalizaciones con el filtro `estado = PENDIENTE` preaplicado, no un módulo aparte.
+Los roles con acceso global tienen un selector "Míos / Todos". "Revisión" es la lista de viáticos con `estado = PENDIENTE` preaplicado, no un módulo aparte.
+
+---
+
+## F-12 · Habilitar la legalización (paso de SOLICITUD a LEGALIZACIÓN)
+
+**Actor:** el dueño (VIAJERO), en un viático `CON_SOLICITUD`. **Precondición:** etapa `SOLICITUD`, `estado = APROBADO` y, si `requiere_gastos_viaje`, `estado_financiero = TRANSFERIDO` (RN-28).
+
+1. En el detalle aparece el aviso "Su solicitud fue aprobada y el desembolso registrado. Cuando regrese del viaje, cargue sus facturas" y el botón **"Iniciar legalización"**.
+2. Si aún no se cumple la condición, el botón está deshabilitado y explica qué falta ("Esperando desembolso de Financiero").
+3. Al confirmar: el **mismo `VT-xxxxxx`** pasa a etapa **LEGALIZACIÓN**, el `estado` vuelve a `PENDIENTE` para auditar las facturas, y `estado_financiero` y `valor_asignado` se conservan. La solicitud queda congelada y su PDF sigue disponible.
+4. Continúa con F-05 (gastos) y F-06 (revisión) como en cualquier legalización.
+
+**Alternos:** si el viaje no se realizó, la solicitud puede quedarse sin legalizar (la cancelación formal es post-MVP, §16); un anticipo `TRANSFERIDO` sin legalizar se gestiona fuera del sistema (S-08).

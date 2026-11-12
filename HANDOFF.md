@@ -7,13 +7,39 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ terminadas**; S1-08 a S1-13 pendientes |
+| Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ terminadas**; **próxima: S1-07b**, luego S1-08 a S1-13 (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-07 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). S1-01 a S1-07 y la actualización documental v0.4 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge). La actualización documental está **sin commitear** hasta que el usuario lo indique |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**2026-11-12 · Actualización integral del baseline documental (SPEC v0.4).** Por decisión explícita del dueño del producto se descongeló la documentación para incorporar cuatro cambios y el análisis de los 10 archivos de Apps Script. **No se escribió código ni migraciones.**
+
+| Cambio | Decisión | ADR |
+| :--- | :--- | :--- |
+| Acceso híbrido | DP-01 **reemplazada**: operativos con usuario/contraseña (Argon2id) + recuperación por correo; SUPERADMIN solo con Google `@trulab.co`; John Hernandez (`john.hernandez@trulab.co`) es el SUPERADMIN inicial y cualquier SUPERADMIN crea/promueve a otros (nunca queda sin ninguno activo). RN-12 y RN-15 reescritas, RF-002 reactivado | ADR-027 (reemplaza ADR-006) |
+| AWS | DP-05 **resuelta**: RDS PostgreSQL 16, S3, SES, ECS Fargate o App Runner (DP-21 abierta). GCP descartado | ADR-028 |
+| Entidad unificada | DP-19: `viaticos` (`VT-000001`) reemplaza `legalizaciones`; modalidades `CON_SOLICITUD` / `LEGALIZACION_DIRECTA`; etapas `SOLICITUD` / `LEGALIZACION`; `viatico_trayectos` (1–5); `viatico_eventos`; `v_viatico_saldos` | ADR-029 |
+| Tarifas | DP-20: `tarifas_viaticos` (ciudad × empleado/prestador, 6 conceptos), administrada por SUPERADMIN; seed de 22 destinos de `calcularGastos.html`; RN-29 define el cálculo; `proyectos.exige_formato_prestador` reemplaza la lista fija de proyectos | ADR-030 |
+
+**Archivos actualizados:** `SPEC.md` (v0.4: §1–§18, RN-01 a RN-33, RF-001/002/017/018, DP-01/05/19/20/21, supuestos S-09 a S-14), `docs/architecture.md` (diagramas, §3, §4, §5 reescrita, §7, §8, §11, §12 y ADR-027 a ADR-030), `docs/database-design.md` (reescrita), `docs/api-design.md` (reescrita), `docs/user-flows.md` (reescrita; incluye diagramas de las dos modalidades), `ROADMAP.md`, `SPRINTS.md` (S1-07b, S1-08, semana 2 nueva, S3-11, semana 5 y capacidad), `CLAUDE.md`, `.env.example` y este archivo.
+
+**Variables nuevas en `.env.example`:** `SUPERADMIN_EMAIL=john.hernandez@trulab.co` y `SUPERADMIN_NOMBRE=John Hernandez` (antes vacío / genérico), `PASSWORD_RESET_TTL_MINUTES`, `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES`, `MAIL_BACKEND` (`log` | `ses`), `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_SES_SENDER`, `FRONTEND_URL`. Se **quitaron** `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` y `STORAGE_BUCKET` (sin uso en el código). `STORAGE_BACKEND` ahora es `local | s3`.
+
+**Ojo para S1-07b (efectos de las variables):** `SUPERADMIN_EMAIL` ya no está vacío por defecto, así que `scripts/crear_env.py` y la CI generarán un `.env` que **sí crea** al SUPERADMIN en `migrate`. Hay que revisar que las pruebas existentes (`test_superadmin_inicial.py`, `test_migraciones.py`) no dependan de que la variable esté vacía.
+
+**Cosas que el usuario debe aportar (no están en el repo):**
+1. **P-7:** los 10 archivos de Apps Script. Los **valores** de las tarifas (22 destinos × empleado/prestador × 6 conceptos), la lista de proyectos que exigen formato de prestador (`P-CONEXI-002`…) y la hoja `PROYECTOS` **no se inventaron**: la documentación solo define su estructura. El seed saldrá de un CSV validado.
+2. **P-6:** cuenta AWS, identidad SES verificada (y salida del *sandbox*), bucket y RDS.
+3. **P-8:** `username`, correo de contacto y si es prestador de cada usuario operativo.
+
+**Supuestos nuevos a validar (SPEC §17.3):** S-09 (solicitud sin gastos de viaje, solo tiquetes), S-10 (gestión de tiquetes como evento de ADMIN), S-11 (`presupuesto_solicitado` nulo con formato o sin gastos), S-12 (al habilitar la legalización se conservan `estado_financiero` y `valor_asignado`), S-13 (contraseña temporal por correo; ADMIN no la ve), S-14 (bloqueo de 15 min tras 5 fallos).
+
+**Inconsistencias detectadas y cómo se resolvieron:** (a) la petición hablaba de `PATCH …/valor-asignado` y de `valor_transferido` a la vez: se usa `valor-asignado` (lo que escribe FINANCIERO) porque `valor_transferido` es calculado; (b) `CHECK` de contraseña por rol: el `username` es obligatorio solo para operativos y puede ser nulo para SUPERADMIN; (c) `fecha_ida/regreso` como `TIMESTAMPTZ` (como pidió el negocio) pese a la convención de `fecha_*` = `DATE`: documentado como excepción; (d) `usuarios`, `sesiones` y los tokens **no** llevan RLS (el login consulta antes de tener contexto); (e) con la semana 5 el MVP se entrega a las 5 semanas, y S1-12 y S3-05 se movieron a esa semana.
+
+### Estado anterior (S1-07, sigue vigente)
 
 **S1-07 · Modelo de identidad y auditoría.** Migración `20261112_1433_identidad_y_auditoria` (`a154d56e054d`) con 5 tablas, sus modelos SQLAlchemy y el SUPERADMIN inicial. Sin endpoints, sin login ni matriz de permisos.
 
@@ -21,7 +47,7 @@
 
 | Tabla | Modelo | Contenido |
 | :--- | :--- | :--- |
-| `usuarios` | `app/modules/usuarios/models.py` | Columnas base + `nombre_completo`, `correo` (**CITEXT**, único, `CHECK` de formato), `cedula` (única entre no eliminados, parcial), `celula_id` → `celulas`, `rol` (`CHECK` con los 4 roles), `cargo_id` → `cargos`, `activo` (por defecto `true`), `google_sub` (único, nulo hasta el primer login), `ultimo_acceso`. **Sin contraseña** (DP-01, RN-15) |
+| `usuarios` | `app/modules/usuarios/models.py` | Columnas base + `nombre_completo`, `correo` (**CITEXT**, único, `CHECK` de formato), `cedula` (única entre no eliminados, parcial), `celula_id` → `celulas`, `rol` (`CHECK` con los 4 roles), `cargo_id` → `cargos`, `activo` (por defecto `true`), `google_sub` (único, nulo hasta el primer login), `ultimo_acceso`. **Sin contraseña todavía** (S1-07b añade `password_hash` solo para operativos, ADR-027) |
 | `cargos` | `app/modules/cargos/models.py` | Columnas base + `folio` **CA-000001** desde `seq_folio_cargos` (RN-04; la secuencia pertenece a la columna), `nombre` (único sin distinguir mayúsculas entre no eliminados: se puede recrear uno eliminado), `descripcion` |
 | `celulas` | `app/modules/catalogos/models.py` | Catálogo (DP-14): `nombre` único sin distinguir mayúsculas, `activo`, `orden`, autores, `migrado_de`; sin `deleted_at` (se desactiva). Estructura común `ConCatalogo`, reutilizable para `proyectos` y `rubros`. **Sin valores en el código**: llegan de la exportación de AppSheet (P-2) o de la administración (RF-016) |
 | `sesiones` | `app/modules/auth/models.py` | `usuario_id` (FK `CASCADE`), `token_hash` (único; **`CHECK` de 64 hexadecimales**, así que un refresh token en claro no puede guardarse), `expires_at` (> `created_at`), `revoked_at`, `ip` (INET), `user_agent` |
@@ -39,14 +65,14 @@
 1. **Columnas base** en todas las tablas: `created_at/updated_at` y `created_by/updated_by` (las fija el service con el usuario autenticado desde S1-10; `NULL` = sistema o ETL).
 2. **`auditoria`** para seguridad y administración. `registrar(session, accion, entidad, entidad_id, usuario_id=..., datos=..., ip=..., user_agent=...)` agrega la fila a la **misma transacción** que el cambio. `datos` se sanea: **rechaza** claves de secretos (`token`, `refresh_token`, `id_token`, `token_hash`, `password`, `cookie`, `authorization`…, en cualquier nivel) y **enmascara** la cédula (`******4050`).
 3. **Solo inserción, en dos capas:** `trulab_app` no tiene `UPDATE`/`DELETE`, y el trigger `tg_auditoria__solo_insercion` (más `tg_auditoria__sin_truncate`) rechaza `UPDATE`, `DELETE` y `TRUNCATE` **para cualquier rol**, incluido `trulab_owner`. Única excepción: el `SET NULL` de `usuario_id` que hace la FK si se purga un usuario.
-4. `legalizacion_eventos` (historial funcional) llega con F4.
+4. `viatico_eventos` (historial funcional, antes `legalizacion_eventos`) llega con F4 (S2-02).
 
 **Estrategia para Google Workspace** (se implementa en S1-08; el modelo ya está listo):
 - `POST /auth/google` verifica el ID token de Google (firma, `aud` = `GOOGLE_CLIENT_ID`, `iss`, vencimiento, `email_verified`) y exige `hd` = `GOOGLE_WORKSPACE_DOMAIN` (RN-12).
 - Busca el usuario por `correo` (CITEXT: sin distinguir mayúsculas). Si no existe, está inactivo o no tiene rol: **403** y `auditoria` `ACCESO_DENEGADO` (sin token, solo el motivo y el correo).
 - **Primer login:** fija `google_sub` (único). En los siguientes se exige que el `sub` coincida: si la cuenta de Google se recreó con el mismo correo, se deniega hasta que un administrador lo revise. Actualiza `ultimo_acceso`.
 - **Sesión propia** (ADR-005): access JWT de 15 min en memoria; refresh opaco aleatorio en cookie httpOnly, del que en `sesiones` solo se guarda el SHA-256 (el `CHECK` lo garantiza). Rotación en cada `/auth/refresh` (revoca la anterior con `revoked_at` y crea otra); logout, desactivación y cambio de rol revocan las sesiones del usuario.
-- Sin contraseñas ni autorregistro: los usuarios los crean ADMIN o SUPERADMIN (S1-10); el primero, el seed.
+- **[Superado por ADR-027]** Esta estrategia aplica ahora **solo al SUPERADMIN**; los operativos usan usuario y contraseña (S1-08). Sin autorregistro: los usuarios los crean ADMIN o SUPERADMIN (S1-10); el primero, el seed.
 
 **Decisiones técnicas de S1-07:**
 - **`celulas` entra en S1-07** porque `usuarios.celula_id` es FK a ella (§2.2, §3). Solo la tabla y su modelo; `proyectos` y `rubros` llegan con `gastos`, y la API de catálogos con S2-05.
@@ -237,7 +263,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 ## Trabajo completado
 
 - [x] Hito 0: documentación base (commit `7db3188`)
-- [x] **DP-01 ✅** Acceso solo con Google Workspace de Trulab, validado contra Usuarios y rol; sin contraseñas (ADR-006)
+- [x] **DP-01 ✅** ~~Acceso solo con Google Workspace; sin contraseñas (ADR-006)~~ → **reemplazada el 2026-11-12 por el acceso híbrido (ADR-027)**
 - [x] **DP-02 ✅** Proyecto = lista cerrada en cada gasto; Segmentador = filtro de fechas (ADR-017, ADR-018)
 - [x] **DP-04 ✅** Solo FINANCIERO registra el valor transferido; regla de recursos propios (ADR-019)
 - [x] **DP-07 ✅** Estructura real de las 5 tablas (ADR-020)
@@ -261,23 +287,36 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-06** CI en GitHub Actions: `pre-commit`, `backend` (Docker + PostgreSQL), `frontend` (Node 24) e `integracion` (Compose completo + contrato OpenAPI); actionlint; ADR-026
 - [x] **S1-07** Modelos y migración de `usuarios`, `cargos`, `celulas`, `sesiones` y `auditoria` (solo inserción con trigger); SUPERADMIN inicial por `SUPERADMIN_EMAIL`; 92 pruebas de backend
 
+- [x] **2026-11-12** Actualización documental SPEC v0.4 (ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19, DP-20)
+
 ## Trabajo pendiente
 
+- [ ] Commit de la actualización documental v0.4 (cuando el usuario lo indique)
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-08 a S1-13
+- [ ] Sprint 1: **S1-07b**, S1-08 a S1-11, S1-13 (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
-- [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
-- [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
-- [ ] Semanas 2 a 4
+- [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**
+- [ ] Validar los supuestos S-01 a S-14, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
+- [ ] Decidir DP-21 (ECS Fargate o App Runner) antes de S3-07
+- [ ] Semanas 2 a 5
 
 ## Próxima tarea sugerida
 
-**S1-08** · Auth: `/auth/google` (verificación del ID token y `hd`), JWT de acceso, refresh rotativo en cookie, `/auth/refresh`, `/auth/logout`, `/me` (5 h; depende de S1-07 ✅ y de **P-3**, el OAuth Client ID; mientras llega, el login de desarrollo solo con `ENV=local`, R1.1; skills `agent-skills:security-and-hardening`, `agent-skills:test-driven-development`). Sigue la estrategia de Google Workspace de S1-07. Necesitará dependencias nuevas (`google-auth`, `PyJWT`) y la variable `JWT_SECRET`. Pendiente con el usuario: push y PR para la primera ejecución real de la CI y proteger `main` con los 4 checks. En paralelo, sin bloquear al desarrollador:
-1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
-2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
-3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
+**S1-07b** · Migración correctiva de identidad (2 h; depende de S1-07 ✅; skills `agent-skills:test-driven-development`, `engineering:system-design`). Checklist exacto en el resumen de la sesión del 2026-11-12:
+
+1. TDD: pruebas de restricciones primero (`CHECK` de contraseña por rol, `username` obligatorio para operativos, `google_sub` solo SUPERADMIN, hash de token de 64 hex).
+2. Alembic: `usuarios` + `username` (CITEXT único, formato), `password_hash`, `debe_cambiar_password`, `password_cambiada_at`, `intentos_fallidos`, `bloqueado_hasta`, `es_prestador_servicios`, `fecha_nacimiento`; `ck_usuarios__password_segun_rol`, `ck_usuarios__username_operativo`, `ck_usuarios__google_solo_superadmin`. **Sin** `firma_archivo_id` (llega con `archivos`, S2-02).
+3. Tabla `tokens_recuperacion_password` con `CHECK` de hash, `expires_at > created_at`, índices y privilegios (`SELECT, INSERT, UPDATE`, sin `DELETE`).
+4. Modelos SQLAlchemy y enums (`AccionAuditoria`: acciones nuevas); `audit.py` ya rechaza `password`/`token_hash`: añadir `password_hash`.
+5. Revisar el seed: `SUPERADMIN_EMAIL=john.hernandez@trulab.co` y `SUPERADMIN_NOMBRE=John Hernandez`; el SUPERADMIN queda sin `username` ni contraseña.
+6. Ajustar `Settings` (`password_reset_ttl_minutes`, `login_*`, `mail_backend`, `frontend_url`, `aws_*`) y la documentación de `backend/README.md`.
+7. Verificar: `upgrade head` → `downgrade -1` → `upgrade head` → `alembic check`, pruebas, ruff/mypy y `pre-commit`; actualizar este archivo.
+
+Después **S1-08** (6 h): auth híbrida. Dependencias nuevas: `argon2-cffi`, `google-auth`, `PyJWT` (y `boto3` cuando llegue SES/S3). Variable `JWT_SECRET`. Mientras llega el OAuth Client ID (P-3), login de desarrollo del SUPERADMIN solo con `ENV=local`.
+
+Pendiente con el usuario: commit de esta actualización documental; push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks. En paralelo, sin bloquear al desarrollador: P-3, P-6, P-7 (aportar los archivos de Apps Script y validar las tarifas), P-8, P-2 (exportación de AppSheet) y DP-21.
 
 ## Decisiones
 
@@ -285,50 +324,56 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 | ID | Resolución | ADR |
 | :--- | :--- | :--- |
-| DP-01 ✅ | Solo Google OAuth con Google Workspace de Trulab. Acceso solo si el correo está en Usuarios, activo y con rol. Sin registro público ni gestión de contraseñas | ADR-006 |
+| DP-01 ✅ *(actualizada 2026-11-12)* | Acceso **híbrido**: operativos con usuario/contraseña (Argon2id, recuperación por correo); SUPERADMIN solo con Google `@trulab.co`. SUPERADMIN inicial `john.hernandez@trulab.co`; los SUPERADMIN los crea/promueve otro SUPERADMIN; nunca el último se desactiva | ADR-027 (reemplaza ADR-006) |
 | DP-02 ✅ | Proyecto = lista cerrada en `gastos` (no en la legalización). Segmentador = filtro `desde`/`hasta`, no se migra | ADR-017, ADR-018 |
 | DP-03 ✅ | Absorbida por DP-13: *Devolver* regresa a `PENDIENTE` con comentario | ADR-021 |
 | DP-04 ✅ | Solo FINANCIERO (y SUPERADMIN) registra o modifica el valor transferido. `valor_transferido = recursos_propios ? 0 : Valor_T` | ADR-019 |
 | DP-07 ✅ | Estructura real validada: Cargos, Usuarios, Crear_legalizacion, Registro_Gastos, Segmentador | ADR-020 |
-| DP-13 ✅ | `estado` = PENDIENTE / APROBADO / RECHAZADO (ADMIN); `estado_financiero` = PENDIENTE / TRANSFERIDO / PAGADO / PROCESADO (FINANCIERO); `Estado legalizacion` = espejo | ADR-021 |
+| DP-05 ✅ *(2026-11-12)* | AWS: RDS PostgreSQL 16, S3, SES, ECS Fargate o App Runner. GCP descartado | ADR-028 |
+| DP-13 ✅ | `estado` = PENDIENTE / APROBADO / RECHAZADO (ADMIN); `estado_financiero` = PENDIENTE / TRANSFERIDO / PAGADO / PROCESADO (FINANCIERO); `Estado legalizacion` = espejo. Rigen en ambas etapas | ADR-021 |
 | DP-14 ✅ | Catálogos `proyectos`, `rubros`, `celulas` en tablas maestras, administradas por SUPERADMIN | ADR-022 |
 | DP-15 ✅ | `soporte` (imagen) o `archivo` (PDF); al menos uno por gasto | ADR-023 |
 | DP-16 ✅ | Indicadores sobre `gastos.fecha_factura`; sin fechas de viaje | ADR-024 |
 | DP-17 ✅ | Recursos propios: lo marca el VIAJERO al crear; transferido = 0, la empresa reembolsa | ADR-019 |
 | DP-18 ✅ | ADMIN aprueba, rechaza, devuelve y revisa; no toca valor transferido, `Estado_P`, pagos ni liquidación | ADR-025 |
-| RN-27 ✅ | Nadie aprueba, valida financieramente ni paga una legalización creada por sí mismo; solo SUPERADMIN (soporte, contingencia, administración, pruebas controladas), con auditoría | ADR-025 |
+| DP-19 ✅ *(2026-11-12)* | Entidad unificada `viaticos` (`VT-`): `CON_SOLICITUD` / `LEGALIZACION_DIRECTA`; etapas `SOLICITUD` / `LEGALIZACION` | ADR-029 |
+| DP-20 ✅ *(2026-11-12)* | `tarifas_viaticos` por ciudad y tipo de vinculación, administrada por SUPERADMIN | ADR-030 |
+| RN-27 ✅ | Nadie aprueba, valida financieramente ni liquida un viático creado por sí mismo, en ninguna etapa; solo SUPERADMIN, con auditoría | ADR-025 |
 
 ### Abiertas, no bloqueantes (detalle en `SPEC.md` §17.2)
 
 | ID | Tema | Cuándo |
 | :--- | :--- | :--- |
-| DP-05 | Hosting y almacenamiento | Gate de la semana 2 |
+| DP-21 | ECS Fargate o App Runner (por defecto App Runner) | Antes de S3-07 |
 | DP-06 | Correos en el MVP | F6 (opcional) |
 | DP-08 | Paleta y logo | UI (hay tokens provisionales) |
-| DP-09 | Formato de folios / IDs históricos de AppSheet | F3 |
+| DP-09 | Folios `CA-`/`VT-`; qué hacer con los IDs históricos de AppSheet (por defecto, `migrado_de`) | F3 |
 | DP-10 | Qué se registra al pagar (la semántica del signo ya la respalda DP-17) | F6 |
 | DP-11 | Solo COP | — |
 | DP-12 | Financiero no edita gastos ajenos | F5 |
 
 ## Riesgos conocidos
 
-1. **Calendario ajustado:** déficit de unas 20 h en las semanas 1 y 2 (`SPRINTS.md`, resumen de capacidad). Plan B: una semana 5 de holgura.
+1. **Calendario:** el nuevo alcance añade unas 35 h; con la **semana 5 activada** el déficit global es ≈ 12,5 h, concentrado en las semanas 1 y 2 (`SPRINTS.md`).
 2. **Alcance nuevo sin estimar** (por instrucción, el plan no se re-estimó): administración de catálogos para SUPERADMIN (RF-016, F-03b), segunda dimensión de estado (`estado_financiero`) y tres acciones de ADMIN en lugar de dos. Estimación informal: +6 a 8 h repartidas entre S2-04, S2-05, S2-10 y S3-01. Agrava el riesgo 1.
 3. **Supuestos S-01 a S-08 por validar** (S-06 ya es la regla definitiva RN-27) (`SPEC.md` §17.3), en especial la semántica y el orden de `Estado_P` (S-03), devolver desde `APROBADO` (S-01) y la ausencia de un paso "enviar" (S-02): ADMIN podría aprobar mientras el viajero aún carga gastos.
 4. **Datos históricos inconsistentes** con las reglas nuevas: `Estado_P` `Pagado` con `Estado` distinto de `Aprobado`, valores de catálogo con grafías distintas, PDF guardados en `Soporte`. El ETL los reporta; hay que decidir con el negocio antes del corte.
 5. **Migración de soportes** desde AppSheet o Google Drive: volumen y permisos desconocidos (P-2). Dos adjuntos por gasto.
-6. **Dependencia externa** para el OAuth Client ID (admin de Google Workspace).
+6. **Dependencias externas:** OAuth Client ID (solo SUPERADMIN, ya no bloquea al resto), **cuenta AWS y SES** (identidad verificada, salida del *sandbox*), y **los archivos de Apps Script con las tarifas** (P-7).
+6b. **Seguridad de contraseñas:** se introduce una superficie nueva (fuerza bruta, enumeración de usuarios, tokens de recuperación). Mitigaciones en RNF-02 y `docs/architecture.md` §5; revisión específica en S4-03.
+6c. **Tarifas mal extraídas** de `calcularGastos.html` darían presupuestos incorrectos: el CSV lo valida el dueño del producto y el cálculo tiene pruebas con tablas de casos.
 7. **WeasyPrint en Windows:** mitigado ejecutando el backend en Docker.
 8. **Datos personales:** la cédula (usuarios y legalizaciones) exige un manejo cuidadoso (RNF-09).
 9. **Dos Pythons en el equipo:** 3.15 es el predeterminado del sistema y no sirve para el proyecto (sin wheels de PyYAML). *Mitigación:* `.python-version`, `.venv` con 3.12 y `default_language_version` en pre-commit; ejecutar siempre desde `.venv`. Docker Desktop ya funciona (necesario para S1-02 y S1-03).
-9. **Hosting (DP-05)** sin decidir: bloquea la infraestructura de la semana 3 si no se resuelve en el gate de la semana 2.
+9. **Hosting:** resuelto (AWS). Queda DP-21 y la salida del *sandbox* de SES.
 
 ## Diferencias entre el informe original y la app real (resueltas en la documentación)
 
 - El proyecto estaba en la legalización → realmente está **en el gasto** (lista cerrada, ahora tabla maestra).
 - `Segmentador` como "clasificación" → realmente es **solo un filtro de fechas**, que se aplica sobre la **fecha de factura**.
-- Login con JWT y contraseña bcrypt → realmente es **solo Google Workspace**, sin contraseñas.
-- `fecha_inicio`/`fecha_fin` → realmente solo hay **`Fecha legalizacion`**; no se agregan fechas de viaje.
+- Login con JWT y contraseña bcrypt (informe) → AppSheet era solo Google Workspace → **decisión final de 2026-11-12: híbrido** (contraseña Argon2id para operativos; Google solo para SUPERADMIN).
+- Dos sistemas separados (Apps Script para solicitar, AppSheet para legalizar) → **una sola entidad `viaticos`** con etapas.
+- `fecha_inicio`/`fecha_fin` → AppSheet solo tiene **`Fecha legalizacion`**; las fechas de viaje existen ahora en `viatico_trayectos` (solicitud), pero los indicadores siguen usando la fecha de factura.
 - Un estado `BORRADOR → LEGALIZADA → PAGADA` → realmente hay **dos**: operativo (Pendiente/Aprobado/Rechazado, ADMIN) y financiero (Pendiente/Transferido/Pagado/Procesado, FINANCIERO), más un espejo.
 - ADMIN pagaba y devolvía → realmente ADMIN es **operación** (aprueba, rechaza, devuelve) y no toca dinero.
 - Gasto con `descripcion` y un soporte → realmente tiene **rubro, concepto, CC_Nit, empresa, observaciones, Soporte (imagen) y Archivo (PDF)**, con al menos uno de los dos.
@@ -338,6 +383,11 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 ---
 
 ## Historial de sesiones
+
+### 2026-11-12 · Sesión 5: actualización integral del baseline documental (SPEC v0.4)
+- Descongelada la documentación por decisión del dueño del producto. ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19 y DP-20 nuevas, DP-21 abierta.
+- `SPEC.md` 0.3 → 0.4; reescritas `docs/database-design.md`, `docs/api-design.md` y `docs/user-flows.md`; editadas `docs/architecture.md`, `ROADMAP.md`, `SPRINTS.md`, `CLAUDE.md` y `.env.example`. Sin código ni migraciones.
+- Plan: S1-07b nueva, S1-08 redefinida, semana 2 reorganizada, S3-11 (UI de solicitud), semana 5 activada.
 
 ### 2026-11-11 · Sesión 4: inicio del Sprint 1, S1-01
 - Verificado `main` = `origin/main` = `62b91cf`.

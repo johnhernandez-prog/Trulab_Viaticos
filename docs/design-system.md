@@ -9,7 +9,7 @@
 
 1. **El celular primero:** el viajero registra gastos de pie, en campo y con una mano. Usa botones grandes, una columna y la cámara a un toque.
 2. **El dinero se lee de inmediato:** las cifras van alineadas a la derecha, en tipografía tabular y con el signo y el color del saldo evidentes.
-3. **El estado siempre visible:** cada legalización muestra su estado con color **y** texto (nunca solo color).
+3. **El estado siempre visible:** cada viático muestra su estado con color **y** texto (nunca solo color).
 4. **Densidad según el rol:** el viajero ve tarjetas amplias y financiero ve tablas densas en escritorio.
 5. **Accesible por defecto:** WCAG 2.1 AA, operable con teclado, contraste mínimo de 4,5:1 en texto.
 
@@ -35,9 +35,9 @@ Se definen como variables CSS (formato shadcn, HSL) en `:root` y se consumen des
 
 Cada color semántico tiene una variante `-subtle` (fondo claro, por ejemplo `#FEF2F2` para destructive) para insignias y alertas.
 
-### Colores de estado de legalización
+### Colores de estado del viático
 
-> Estados reales (DP-13 ✅, RN-05). La legalización muestra **dos insignias**: estado operativo y estado financiero. Se usan solo los tonos semánticos existentes; no se crean colores nuevos. Los emojis de AppSheet (`⛔`, `⌛`) se sustituyen por iconos Lucide con texto.
+> Estados reales (DP-13 ✅, RN-05). El viático muestra **tres indicadores**: la **etapa** (Solicitud / Legalización, como etiqueta neutra), el estado operativo y el estado financiero. Se usan solo los tonos semánticos existentes; no se crean colores nuevos. Los emojis de AppSheet (`⛔`, `⌛`) se sustituyen por iconos Lucide con texto.
 
 **Estado operativo** (`estado`, lo cambia ADMIN):
 
@@ -108,7 +108,7 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 
 - Tamaños: `sm` (32 px, solo escritorio), `default` (40 px) y `lg` (48 px, CTA en móvil).
 - **Botón primario en móvil:** ocupa el ancho completo y va fijo al pie del formulario, por encima de la BottomBar.
-- **FAB en móvil** para "+ Nueva legalización" y "+ Agregar gasto": 56 px, abajo a la derecha.
+- **FAB en móvil** para "+ Nuevo viático" y "+ Agregar gasto": 56 px, abajo a la derecha.
 - Estado de carga: spinner más el texto "Guardando…", y el botón deshabilitado para evitar el doble envío.
 - Los botones de solo icono llevan `aria-label` obligatorio.
 
@@ -131,11 +131,11 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 - Orden por columna con indicador; filtros en una barra superior; paginación al pie con "1–20 de 134".
 - Acciones por fila en un menú `⋯` (DropdownMenu). La acción primaria puede ir visible.
 - **Tabla de Pagos:** columnas Folio, Viajero, Motivo, Fecha de legalización, Transferido, Gastado, **Saldo** (coloreado), Estado y Estado financiero. Al pie, una fila de totales.
-- Estado vacío: ilustración simple o icono, mensaje y CTA ("Aún no tienes legalizaciones. Crear la primera").
+- Estado vacío: ilustración simple o icono, mensaje y CTA ("Aún no tienes viáticos. Crear el primero").
 
 ## 8. Cards
 
-- **Tarjeta de legalización (móvil):** a la izquierda la insignia de estado y el folio; a la derecha el monto total. Debajo, el motivo en una o dos líneas, el viajero (si el rol ve todas), la fecha de legalización, el saldo y la insignia de estado financiero. Toda la tarjeta es pulsable y lleva al detalle.
+- **Tarjeta de viático (móvil):** a la izquierda la insignia de estado y el folio; a la derecha el monto total. Debajo, el motivo en una o dos líneas, el viajero (si el rol ve todas), la fecha de legalización, el saldo y la insignia de estado financiero. Toda la tarjeta es pulsable y lleva al detalle.
 - **Tarjeta de gasto:** miniatura del soporte (icono de PDF si solo hay archivo, o icono "Falta comprobante" en `warning`), concepto, rubro, proyecto, fecha de factura y valor.
 - **Tarjeta KPI** (dashboard): etiqueta, valor grande y variación opcional.
 - Padding `p-4`, `rounded-lg`, `border`, `shadow-sm`.
@@ -143,7 +143,7 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 ## 9. Modales y diálogos
 
 - `Dialog` en escritorio y `Sheet` (panel inferior) en móvil para formularios cortos (agregar gasto, devolver o rechazar con comentario).
-- `AlertDialog` para confirmar acciones destructivas o de estado: "¿Marcar LG-000123 como pagado? Saldo: −$120.000 a reembolsar".
+- `AlertDialog` para confirmar acciones destructivas o de estado: "¿Marcar VT-000123 como pagado? Saldo: −$120.000 a reembolsar".
 - Al abrir, el foco va al primer campo; `Esc` cierra; el foco vuelve al disparador al cerrar.
 - No se usan modales anidados.
 
@@ -152,7 +152,7 @@ En inputs, **el mínimo es 16 px en móvil** para evitar el zoom automático de 
 | Tipo | Componente | Uso |
 | :--- | :--- | :--- |
 | Toast | `sonner` | Confirmaciones breves ("Gasto guardado"), 4 s, en la parte inferior del móvil y arriba a la derecha en escritorio |
-| Alerta en línea | `Alert` | Mensajes persistentes de contexto: "Esta legalización fue devuelta: <comentario>" (si sigue Pendiente con `devuelta_at`) |
+| Alerta en línea | `Alert` | Mensajes persistentes de contexto: "Este viático fue devuelto: <comentario>" (si sigue Pendiente con `devuelta_at`) |
 | Banner | `Alert` a todo el ancho | Problemas del sistema o sin conexión |
 | Error de campo | Texto bajo el input | Validación |
 
@@ -166,7 +166,7 @@ Todo componente que consume datos implementa estos cinco estados:
 2. **Vacío:** mensaje más CTA.
 3. **Error:** mensaje y botón "Reintentar".
 4. **Éxito o datos:** el contenido.
-5. **Deshabilitado o solo lectura:** cuando el estado de la legalización no permite editar, se muestra el motivo ("Aprobada el 06/11/2026").
+5. **Deshabilitado o solo lectura:** cuando el estado o la etapa del viático no permite editar, se muestra el motivo ("Aprobada el 06/11/2026").
 
 Los estados interactivos (hover, focus-visible, active, disabled) usan un anillo de foco de 2 px `ring` con *offset*, y nunca se quita el *outline* sin un reemplazo.
 
@@ -182,7 +182,7 @@ Puntos de quiebre de Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
 ├──────────────────────────┤
 │ [Filtro de estado ▾]     │
 │ ┌──────────────────────┐ │
-│ │ ● En revisión LG-0123│ │  ← tarjetas apiladas
+│ │ ● En revisión VT-0123│ │  ← tarjetas apiladas
 │ │ Taller de campo      │ │
 │ │ 02–05/11  $1.620.000 │ │
 │ └──────────────────────┘ │
@@ -192,7 +192,7 @@ Puntos de quiebre de Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
 └──────────────────────────┘
 ```
 
-- La BottomBar muestra solo los módulos del rol. VIAJERO: Legalizaciones y Perfil. FINANCIERO: Legalizaciones, Pagos, Indicadores y Más (Cargos). ADMIN y SUPERADMIN: Legalizaciones, Pagos, Indicadores y Más (Cargos, Usuarios).
+- La BottomBar muestra solo los módulos del rol. VIAJERO: Viáticos y Perfil. FINANCIERO: Viáticos, Pagos, Indicadores y Más (Cargos). ADMIN y SUPERADMIN: Viáticos, Pagos, Indicadores y Más (Cargos, Usuarios).
 - Hay que respetar `env(safe-area-inset-bottom)`.
 
 ### Tablet (640–1023 px)
@@ -221,7 +221,7 @@ Puntos de quiebre de Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
 
 - Sidebar fija de 240 px.
 - Las tablas densas tienen paginación y filtros por columna.
-- El detalle de legalización usa dos columnas: datos y gastos a la izquierda (2/3) y resumen de saldo, acciones e historial a la derecha (1/3, fijo).
+- El detalle del viático usa dos columnas: datos y gastos a la izquierda (2/3) y resumen de saldo, acciones e historial a la derecha (1/3, fijo).
 - El dashboard es una rejilla de KPIs (4 columnas) con gráficos de 2 columnas.
 
 ## 13. Gráficos (Recharts)
@@ -238,10 +238,10 @@ Puntos de quiebre de Tailwind: `sm` 640, `md` 768, `lg` 1024, `xl` 1280.
 | Fecha | `05/11/2026` | `Intl.DateTimeFormat('es-CO')` |
 | Fecha y hora | `05/11/2026 14:30` (America/Bogota) | |
 | Rango | `02–05 nov 2026` en tarjetas | |
-| Folio | `LG-000123` en fuente mono, `text-xs` | |
+| Folio | `VT-000123` en fuente mono, `text-xs` | |
 
 Toda la interfaz está en español de Colombia.
 
 ## 15. Iconografía
 
-Se usa Lucide a 20 px en la navegación y 16 px en línea, con `stroke-width` de 2. Módulos: Legalizaciones `FileText`, Pagos `CreditCard`, Cargos `Briefcase`, Usuarios `Users`, Indicadores `ChartPie` (equivalentes a los emojis del menú AppSheet).
+Se usa Lucide a 20 px en la navegación y 16 px en línea, con `stroke-width` de 2. Módulos: Viáticos `FileText`, Pagos `CreditCard`, Cargos `Briefcase`, Usuarios `Users`, Indicadores `ChartPie` (equivalentes a los emojis del menú AppSheet).

@@ -59,7 +59,7 @@ Un volumen creado antes de S1-04 tiene a `trulab_owner` como superusuario de arr
 
 **Producción (F10, DP-05):** en un PostgreSQL gestionado, el administrador del proveedor ejecuta el SQL equivalente a `10-roles.sh` una vez; las migraciones corren con `trulab_owner` antes de arrancar la API, y la API solo recibe las credenciales de `trulab_app`.
 
-**MinIO:** no se incluye. Sus imágenes oficiales ya no están disponibles en registros públicos; en local se usa `STORAGE_BACKEND=local`. El almacenamiento de producción se decide con DP-05.
+**MinIO:** no se incluye. Sus imágenes oficiales ya no están disponibles en registros públicos; en local se usa `STORAGE_BACKEND=local`. En staging y producción el almacenamiento es Amazon S3 (DP-05 ✅, ADR-028); el correo, Amazon SES (en local `MAIL_BACKEND=log`).
 
 ## Producción
 
