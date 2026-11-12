@@ -8,12 +8,46 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅, S1-02 ✅ y S1-03 ✅ terminadas**; S1-04 a S1-13 pendientes |
-| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker; sin lógica de negocio ni frontend |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-03 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
-| Última actualización | 2026-11-11 |
+| Semana del sprint | Semana 1: **S1-01 ✅, S1-02 ✅, S1-03 ✅ y S1-04 ✅ terminadas**; S1-05 a S1-13 pendientes |
+| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; sin tablas de negocio ni frontend |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-04 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**S1-04 · Persistencia: Alembic, roles y extensiones.**
+- **Alembic** en `backend/`: `alembic.ini` (archivos `AAAAMMDD_HHMM_<descripcion>`, hooks de ruff), `alembic/env.py` (conexión solo con `DATABASE_URL_MIGRATIONS`, `compare_type`, `compare_server_default`, una transacción por migración, modo `--sql`, descubrimiento automático de `app/modules/<dominio>/models.py`) y `alembic/script.py.mako` (tipado para mypy strict).
+- **`app/core/models.py`:** `Base` con la `naming_convention` de `docs/database-design.md` §9 (`pk_<tabla>`, `ix_/uq_<tabla>__<columnas>`, `fk_<tabla>__<columna>__<tabla_ref>`, `ck_<tabla>__<regla>`).
+- **Migración inicial** `20261112_1000_base_extensiones_y_privilegios` (`3f1c9a7e5b20`): verifica que existe `trulab_app` y que la ejecuta el dueño de la BD; crea `citext` y `pgcrypto`; `REVOKE ALL ON SCHEMA public FROM PUBLIC`; `USAGE` a `trulab_app`; privilegios por defecto (solo DML en tablas y `USAGE, SELECT` en secuencias); `trulab_app` sin acceso a `alembic_version`. Con `downgrade()` completo. Sin tablas de negocio.
+- **Roles:** `infra/db/init/10-roles.sh` (montado en `docker-entrypoint-initdb.d`, idempotente y re-ejecutable): crea `trulab_owner` y `trulab_app` sin atributos privilegiados, sincroniza contraseñas, hace a `trulab_owner` dueño de la BD, `REVOKE ALL ON DATABASE ... FROM PUBLIC` y `CONNECT` a `trulab_app`.
+- **Compose:** `POSTGRES_USER` pasa a `postgres` (superusuario de arranque); nuevo servicio **`migrate`** (`alembic upgrade head`) del que depende `api` (`service_completed_successfully`); `api` recibe `DATABASE_URL_MIGRATIONS=""` (solo conoce a `trulab_app`).
+- **`.env.example`:** `OWNER_DB_USER`/`OWNER_DB_PASSWORD`, `POSTGRES_USER=postgres` y **`DATABASE_URL` definitiva con `trulab_app`** (se quitó la nota provisional de S1-03).
+- `alembic==1.13.3` en `requirements.txt` y en el hook de mypy; `known-third-party = ["alembic"]` en ruff (la carpeta `backend/alembic/` confundía a isort).
+- **15 pruebas nuevas** (28 en total): `test_bd_rol_app.py` (la API es `trulab_app`, sin atributos privilegiados, no es dueña, no hace DDL, no lee `alembic_version`, extensiones instaladas y usables), `test_migraciones.py` (una sola cabeza, BD en `head`, `trulab_owner` no es superusuario, tablas nuevas con solo DML para `trulab_app`, `PUBLIC` sin acceso) y `test_naming_convention.py`.
+- Documentación: `backend/README.md` (sección **Migraciones**: reglas y comandos), `infra/README.md` (roles y permisos), este archivo y `CLAUDE.md`.
+
+**Decisiones técnicas de S1-04:**
+- **Tres roles, no dos:** `postgres` (superusuario de arranque, solo inicializa), `trulab_owner` (dueño, **sin** ser superusuario) y `trulab_app`. Antes `trulab_owner` era el superusuario de la imagen; con mínimo privilegio, quien migra no debe poder saltarse RLS ni crear roles. Las extensiones `citext` y `pgcrypto` son *trusted* en PG 13+, así que el dueño de la BD las crea sin superusuario (también funciona así en PostgreSQL gestionado).
+- **Roles fuera de Alembic, lo demás dentro:** los roles son del clúster y llevan contraseñas, así que van en un script de arranque idempotente. Extensiones, privilegios del esquema y privilegios por defecto son de la BD y van versionados en Alembic (reproducibles en producción).
+- **Privilegios por defecto en la migración** (no en el script): así `alembic_version`, creada antes, no queda accesible para la API, y cada tabla futura hereda solo DML. Las tablas de solo inserción revocarán `UPDATE`/`DELETE` en su migración (`docs/database-design.md` §7).
+- **Guardas en la migración inicial:** se niega a correr si no existe `trulab_app` o si quien la ejecuta no es el dueño de la BD (por ejemplo, `postgres`); si no, los privilegios por defecto no se aplicarían a las tablas.
+- **Servicio `migrate`** en Compose: `docker compose up -d` deja la BD en `head` antes de arrancar la API; es el patrón previsto para producción ("migraciones como paso previo al arranque", `docs/architecture.md` §12). También es el contenedor para crear migraciones y correr las pruebas que necesitan `trulab_owner`.
+- **La API no recibe credenciales de dueño** (`DATABASE_URL_MIGRATIONS=""` en el servicio `api`). Por eso las pruebas de `test_migraciones.py` que necesitan `trulab_owner` se omiten en `api` y corren en `migrate`.
+- **El rol `trulab_app` va literal en las migraciones** (no como constante): una migración es una foto fija.
+- **Alembic 1.13.3** (de la misma época que SQLAlchemy 2.0.36). Revisiones con id hexadecimal de Alembic y nombre de archivo con fecha.
+- **No se tocó `docs/`** (baseline congelado): lo implementado es coherente con `docs/database-design.md` §6, §9 y §10 y `docs/architecture.md` §12. El superusuario de arranque y el servicio `migrate` son detalles de implementación local, registrados aquí y en `infra/README.md`.
+
+**Validaciones de S1-04 (con un `.env` temporal de contraseñas aleatorias, luego eliminado):**
+- `docker compose build api migrate` correcto; `docker compose up -d` desde cero: el script de roles corre en el init, `migrate` aplica `3f1c9a7e5b20` y termina con 0, `db` y `api` *healthy*.
+- BD: `citext 1.6` y `pgcrypto 1.3` instaladas; `trulab_owner` y `trulab_app` con `rolsuper`, `rolcreaterole`, `rolcreatedb` y `rolbypassrls` en `false`; dueño de la BD = `trulab_owner`; ACL de la BD `{trulab_owner=CTc, trulab_app=c}`; ACL de `public` `{pg_database_owner=UC, trulab_app=U}`; privilegios por defecto `trulab_app=arwd` (tablas) y `trulab_app=rU` (secuencias); `alembic_version` = `3f1c9a7e5b20`.
+- La API usa `trulab_app` (`DATABASE_URL`) y no ve `DATABASE_URL_MIGRATIONS`. Desde Windows: `/api/v1/health` → 200 `{"status":"ok","version":"0.1.0","db":"ok"}` con `X-Request-ID`; `/api/v1/docs` → 200 HTML; `/api/v1/openapi.json` → OpenAPI 3.1.0 con `/api/v1/health` (contrato sin cambios).
+- Repetibilidad: `10-roles.sh` dos veces más sobre el volumen existente sin errores; `upgrade head` sin cambios; `downgrade base` (deja solo `plpgsql`, sin privilegios por defecto y el esquema como en PG 16) → `upgrade head` → `alembic check` ("No new upgrade operations detected").
+- Guardas: migrar como `trulab_app` → *permission denied*; como `postgres` → "Las migraciones las ejecuta el dueño de la BD (trulab_owner), no postgres"; sin URL → `RuntimeError` con instrucciones.
+- `alembic revision --autogenerate` genera `AAAAMMDD_HHMM_<slug>.py` formateado y limpio (ruff + mypy en verde); el archivo de prueba se eliminó.
+- Pruebas: **28/28 en `migrate`**; en `api`, 24 pasan y 4 se omiten (necesitan `trulab_owner`). Queda el `DeprecationWarning` de anyio ya conocido. `ruff check`, `ruff format --check` y `mypy` strict (`app tests alembic`) en verde. `pre-commit run --all-files` en verde.
+- Limpieza: `docker compose down -v` y `.env` temporal eliminado.
+
+**Nota para Git Bash:** `docker compose exec db bash /docker-entrypoint-initdb.d/10-roles.sh` necesita `MSYS_NO_PATHCONV=1` (Git Bash reescribe la ruta). En PowerShell funciona tal cual.
 
 **S1-03 · Backend esqueleto.** FastAPI mínimo y operativo dentro del contenedor `api`:
 - `app/main.py` con `create_app()`; `core/config.py` (pydantic-settings; `DATABASE_URL` obligatoria), `core/db.py` (engine síncrono creado al primer uso, `get_db`, `bd_disponible`), `core/errors.py` (problem+json RFC 9457 y base `ErrorDominio`), `core/middleware.py` (`X-Request-ID` y log de acceso), `core/logs.py` (JSON con `request_id`), `core/health.py` (`GET /api/v1/health`).
@@ -101,19 +135,20 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] Entorno local con Python 3.12 (`.venv`), `pre-commit install` y `pre-commit run --all-files` en verde
 - [x] **S1-02** Docker Compose local: PostgreSQL 16, API y frontend (perfil `app`), red y volúmenes
 - [x] **S1-03** Backend esqueleto: FastAPI, config, db, health, problem+json, X-Request-ID, logs JSON; 13 pruebas
+- [x] **S1-04** Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, extensiones `citext`/`pgcrypto`, servicio `migrate`; 28 pruebas
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-04 a S1-13
+- [ ] Sprint 1: S1-05 a S1-13
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
 - [ ] Semanas 2 a 4
 
 ## Próxima tarea sugerida
 
-**S1-04** · Alembic con `naming_convention`, roles de BD `trulab_owner`/`trulab_app` y extensiones `citext` y `pgcrypto` (2 h, depende de S1-03; skill `engineering:architecture`). Al crear `trulab_app`, devolver `DATABASE_URL` del `.env` local a ese rol y quitar la nota de `.env.example`. Alternativa: **S1-05** (frontend esqueleto), que solo depende de S1-01. En paralelo, sin bloquear al desarrollador:
+**S1-05** · Frontend esqueleto (Vite, React, TS, Tailwind, shadcn/ui, tokens, React Router, TanStack Query, `apiClient`; 4 h, solo depende de S1-01; skills `agent-skills:frontend-ui-engineering`, `design:design-system`). Debe quitar el perfil `app` del servicio `frontend`. Alternativa en el backend: **S1-07** (migración `cargos`, `usuarios`, `sesiones`, `auditoria` y seed del primer SUPERADMIN), que ya puede empezar sobre S1-04: modelos en `app/modules/<dominio>/models.py` heredando de `Base`, generar con `docker compose run --rm migrate alembic revision --autogenerate -m "..."` y, en `auditoria`, revocar `UPDATE`/`DELETE` a `trulab_app`. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.

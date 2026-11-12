@@ -1,13 +1,16 @@
 # Entorno local de Trulab Viajes (S1-02, docs/architecture.md §12).
 #
 # Uso desde la raíz del repositorio (el `.env` define COMPOSE_FILE=infra/docker-compose.yml):
-#   docker compose up -d                 # base de datos + API
+#   docker compose up -d                 # base de datos + migraciones + API
 #   docker compose --profile app up -d   # además el frontend (cuando exista S1-05)
 # Sin COMPOSE_FILE en el .env:
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d
 #
 # `frontend` está en el perfil `app` hasta que exista su código: S1-05 quita el perfil.
 # (`api` lo tuvo hasta S1-03.)
+# Roles de BD (S1-04): `postgres` es solo el superusuario de arranque (crea los roles con
+# infra/db/init/10-roles.sh la primera vez). Las migraciones usan trulab_owner (servicio `migrate`)
+# y la API usa trulab_app, sin privilegios de DDL ni BYPASSRLS.
 # MinIO no se incluye: sus imágenes oficiales ya no se publican en registros públicos; en local se usa
 # STORAGE_BACKEND=local (SPEC.md §14: "en local, MinIO o el sistema de archivos").
 
@@ -19,13 +22,21 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-trulab_viajes}
-      POSTGRES_USER: ${POSTGRES_USER:-trulab_owner}
+      # Superusuario de arranque: solo para inicializar y administrar, nunca para la app.
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env}
+      # Roles que crea infra/db/init/10-roles.sh.
+      OWNER_DB_USER: ${OWNER_DB_USER:-trulab_owner}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD:?Defina OWNER_DB_PASSWORD en .env}
+      APP_DB_USER: ${APP_DB_USER:-trulab_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD en .env}
     ports:
       # Solo en localhost: la BD no queda expuesta a la red.
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Se ejecuta solo con el volumen vacío; para reaplicarlo, ver infra/README.md.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     networks:
       - trulab
     healthcheck:
@@ -34,6 +45,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # Aplica las migraciones pendientes (alembic upgrade head) con trulab_owner y termina.
+  # La API arranca solo si terminó bien. También sirve para crear migraciones nuevas:
+  #   docker compose run --rm migrate alembic revision --autogenerate -m "descripcion"
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      target: dev
+    env_file:
+      - path: ../.env
+        required: false
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    volumes:
+      - ../backend:/app
+    networks:
+      - trulab
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
     build:
@@ -45,6 +77,8 @@ services:
         required: false
     environment:
       STORAGE_LOCAL_PATH: /data/storage
+      # Mínimo privilegio: la API solo conoce las credenciales de trulab_app (DATABASE_URL).
+      DATABASE_URL_MIGRATIONS: ""
       # Recarga de uvicorn sobre volúmenes montados desde Windows (no llegan eventos inotify).
       WATCHFILES_FORCE_POLLING: "true"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -58,6 +92,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
       interval: 10s

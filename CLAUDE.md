@@ -42,7 +42,7 @@ Monolito modular: la SPA React habla REST (`/api/v1`) con FastAPI (`routers → 
 ```
 backend/app/{core,modules/<dominio>,templates/pdf}   backend/{alembic,tests}
 frontend/src/{app,components/{ui,layout},features/<dominio>,lib,types}
-infra/  scripts/etl_appsheet/  docs/
+infra/{docker,db/init}  scripts/etl_appsheet/  docs/
 ```
 
 Dominios: `auth`, `usuarios`, `cargos`, `catalogos` (tablas maestras proyectos, rubros y células; las administra SUPERADMIN), `legalizaciones`, `gastos`, `pagos`, `reportes`, `indicadores`.
@@ -93,13 +93,15 @@ Se confirmaron contra la configuración y la estructura real de AppSheet. Solo c
 - **Git:** rama `main` protegida; ramas `feat/<fase>-<tema>`, `fix/...`; commits convencionales en español (`feat(gastos): subir soporte`).
 - **Secretos** solo en `.env` (no versionado); se mantiene `.env.example` al día. Un hook de pre-commit bloquea cualquier `.env`.
 - **Formato:** `.editorconfig` (UTF-8, LF, 2 espacios; 4 en Python) y `.gitattributes` (`eol=lf`, por los contenedores Linux). Hooks en `.pre-commit-config.yaml` (genéricos, ruff, mypy); ESLint/Prettier se agregan en S1-05.
-- **Docker local:** `infra/docker-compose.yml`; desde la raíz `docker compose up -d` (gracias a `COMPOSE_FILE` en `.env`). BD en `127.0.0.1:5433` (5432 lo ocupa un PostgreSQL nativo de Windows). Sin MinIO: en local `STORAGE_BACKEND=local`. Detalle en `infra/README.md`.
+- **Docker local:** `infra/docker-compose.yml`; desde la raíz `docker compose up -d` (gracias a `COMPOSE_FILE` en `.env`) levanta `db`, aplica las migraciones (servicio `migrate`) y arranca `api`. BD en `127.0.0.1:5433` (5432 lo ocupa un PostgreSQL nativo de Windows). Sin MinIO: en local `STORAGE_BACKEND=local`. Detalle en `infra/README.md`.
+- **Roles de BD (S1-04):** `postgres` = superusuario de arranque (solo init); `trulab_owner` = dueño de la BD, **no** superusuario, ejecuta Alembic (`DATABASE_URL_MIGRATIONS`); `trulab_app` = la API (`DATABASE_URL`), solo DML por privilegios por defecto, sin DDL ni `BYPASSRLS`. Roles en `infra/db/init/10-roles.sh` (idempotente); extensiones y privilegios en Alembic. La API no recibe credenciales de dueño.
+- **Migraciones:** `docker compose run --rm migrate alembic revision --autogenerate -m "..."`; modelos en `app/modules/<dominio>/models.py` heredando de `app.core.models.Base` (con `naming_convention`). Las tablas de solo inserción revocan `UPDATE`/`DELETE` a `trulab_app` en su migración. Reglas y comandos en `backend/README.md`.
 - **Python local = 3.12** (`.python-version`), en `.venv` creado con `py -3.12 -m venv .venv` e instalado con `requirements-dev.txt`. El equipo también tiene Python 3.15 como predeterminado del sistema: **no usarlo** para el proyecto (sin wheels de PyYAML). Usar siempre `.venv\Scripts\python` y `.venv\Scripts\pre-commit`.
 - **Identidad git local:** `John Hernandez <John.Hernandez@trulab.co>`; remote `origin` en GitHub (`johnhernandez-prog/Trulab_Viaticos`).
 
 ## Estado actual
 
-**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 a S1-03 terminadas** (estructura, configuración, Docker Compose y esqueleto del backend: `GET /api/v1/health`, docs en `/api/v1/docs`, problem+json, `X-Request-ID`, logs JSON); sin lógica de negocio ni frontend todavía. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
+**Fase:** **Sprint 1 en curso** (semana 1, F1). Todas las decisiones bloqueantes están resueltas (DP-01, DP-02, DP-04 y DP-07 el 2026-11-10; DP-13 a DP-18 el 2026-11-11). **S1-01 a S1-04 terminadas** (estructura, configuración, Docker Compose, esqueleto del backend: `GET /api/v1/health`, docs en `/api/v1/docs`, problem+json, `X-Request-ID`, logs JSON; y persistencia: Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, `citext` y `pgcrypto`); sin tablas de negocio ni frontend todavía. **La documentación está congelada** como baseline de requisitos (commit "docs: finalize requirements, business rules and project decisions"); cambiarla exige decisión del dueño del producto y ADR. El detalle vivo está en `HANDOFF.md`.
 
 ## Cómo retomar
 

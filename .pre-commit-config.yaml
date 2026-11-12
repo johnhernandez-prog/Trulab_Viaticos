@@ -5,7 +5,7 @@
 #   .venv\Scripts\pre-commit install
 # Ejecución manual: .venv\Scripts\pre-commit run --all-files
 #
-# Hooks genéricos (S1-01), ruff (S1-01) y mypy del backend (S1-03).
+# Hooks genéricos (S1-01), ruff (S1-01) y mypy del backend (S1-03; incluye alembic/ desde S1-04).
 # ESLint/Prettier (frontend) se agregan en S1-05; CI los ejecuta igualmente (S1-06).
 
 # Los entornos de los hooks se crean con Python 3.12, aunque el sistema tenga otra versión por defecto.
@@ -50,6 +50,7 @@ repos:
           - pydantic==2.9.2
           - pydantic-settings==2.6.1
           - sqlalchemy==2.0.36
+          - alembic==1.13.3
           - pytest==8.3.3
           - httpx==0.27.2
 
