@@ -8,12 +8,40 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ terminadas**; **próxima: S1-07b**, luego S1-08 a S1-13 (S1-12 pasa a la semana 5) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ y S1-07b ✅ terminadas**; **próxima: S1-08** (auth híbrida), luego S1-09 a S1-13 (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). S1-01 a S1-07 y la actualización documental v0.4 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge). La actualización documental está **sin commitear** hasta que el usuario lo indique |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales) y el commit de S1-07b |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**2026-11-12 · S1-07b · Migración correctiva de identidad (ADR-027).** Migración `20261112_2256_usuarios_acceso_hibrido` (`f7a1a890a1d3`, después de `a154d56e054d`). Sin endpoints ni hashing todavía (S1-08).
+
+| Cambio | Detalle |
+| :--- | :--- |
+| `usuarios` | `username` (CITEXT, único, minúsculas `^[a-z0-9._-]{3,40}$`), `password_hash` (`VARCHAR(255)`, solo formato PHC `$argon2id$`), `debe_cambiar_password`, `password_cambiada_at`, `intentos_fallidos` (≥ 0), `bloqueado_hasta`, `es_prestador_servicios`, `fecha_nacimiento`. `firma_archivo_id` **no** se agregó: depende de `archivos` (S2-02) |
+| `CHECK` por rol | `password_segun_rol` (operativo ⇒ hash; SUPERADMIN ⇒ sin hash), `password_argon2id`, `username_operativo`, `username_formato`, `google_solo_superadmin`, `superadmin_sin_cambio_password`, `intentos_fallidos_no_negativos` |
+| `tokens_recuperacion_password` | `usuario_id` (FK `CASCADE`), `token_hash` (único, `CHECK` 64 hex), `expires_at` (> `created_at`, indexado), `used_at`, `ip`, `created_at`. `trulab_app`: `INSERT, SELECT, UPDATE` (sin `DELETE`) |
+| Guarda | La migración se niega a correr si existe algún usuario operativo (sin credenciales), con un mensaje claro. Probado: falla con un VIAJERO insertado y aplica al quitarlo |
+| Auditoría | Acciones `LOGIN_EXITOSO`, `LOGIN_FALLIDO`, `PASSWORD_CAMBIADA`, `PASSWORD_RECUPERACION_SOLICITADA`, `SUPERADMIN_ASIGNADO`. `sanear()` también rechaza `password_hash`, `password_actual`, `nueva_password`, `password_temporal`, `reset_token` |
+| Seed | El SUPERADMIN creado o promovido queda **sin contraseña** (al promover se borran hash, cambio pendiente y bloqueo) y se audita también `SUPERADMIN_ASIGNADO`. Con el `.env` nuevo crea a `john.hernandez@trulab.co` |
+| `Settings` | `password_reset_ttl_minutes` (15–30), `login_max_failed_attempts`, `login_lockout_minutes`, `mail_backend` (`log`/`ses`), `aws_ses_sender`, `frontend_url`, `storage_backend` (`local`/`s3`), `aws_region`, `aws_s3_bucket`. Rechaza `log` fuera de local, `ses` sin remitente y `s3` sin bucket. `superadmin_email` sigue vacío en el código (el valor vive en `.env`) |
+| Pruebas | **153** en `migrate` (antes 92): nuevas `test_acceso_hibrido_modelo.py` (43 casos), `test_datos_tarifas.py` (3) y `test_config.py`; ajustadas `fabricas.py` (operativos con `username` y `HASH_FICTICIO`), `test_modelo_identidad.py` (`google_sub` solo SUPERADMIN), `test_migraciones.py` (privilegios de la tabla nueva; la purga usa un SUPERADMIN), `test_superadmin_inicial.py` (sin contraseña, `SUPERADMIN_ASIGNADO`), `test_auditoria.py` y `test_health.py` (producción exige SES) |
+
+**Decisiones técnicas de S1-07b:**
+- **`CHECK` de formato Argon2id** además del de rol: impide guardar una contraseña en claro o con otro algoritmo aunque falle el service. Las pruebas de modelo usan un hash ficticio con formato PHC válido para no pagar el costo de Argon2.
+- **`username` en minúsculas por `CHECK`** (`username::text ~ ...`, porque `~` sobre CITEXT no distingue mayúsculas); la búsqueda sigue siendo insensible a mayúsculas por CITEXT. S1-08/S1-10 normalizan a minúsculas antes de guardar.
+- **Un SUPERADMIN promovido puede conservar su `username`** (el `CHECK` solo lo exige a operativos); no estorba y facilita una degradación posterior.
+- **`superadmin_sin_cambio_password`**: no se documentaba como `CHECK`, pero se deriva de "siempre `false` para SUPERADMIN" (`docs/database-design.md` §2.2, actualizado).
+- **Tokens sin `DELETE`** para la app (se invalidan con `used_at`); la purga de vencidos queda como tarea futura con `trulab_owner`.
+- **Validación de `Settings` al arrancar** para que un despliegue en AWS no quede enviando enlaces de restablecimiento al log.
+- **Tarifas como CSV en `backend/app/modules/catalogos/datos/`** (no en `scripts/`): el seed de S2-01 corre en el contenedor del backend, que monta `backend/`. Ciudad visible con tilde (`Bogotá`, `Pichindé Valle`) y la clave del código legado (`Bogota`, `PichindeValle`) va a `migrado_de`. `test_datos_tarifas.py` valida 44 filas, valores enteros ≥ 0 y la equivalencia con la regla legada del transporte interno de prestadores.
+
+**Validaciones de S1-07b:** `alembic downgrade base` → `upgrade head` → `alembic check` ("No new upgrade operations detected"); `downgrade -1` / `upgrade head`; guarda probada; seed `CREADO` con `USUARIO_CREAR` + `SUPERADMIN_ASIGNADO` y John sin `username` ni contraseña; `/api/v1/health` 200 con la configuración nueva; pruebas **153/153** en `migrate` y **144 + 9 omitidas** en `api`; `ruff check`, `ruff format --check`, `mypy` strict y `pre-commit run --all-files` en verde. El contrato OpenAPI no cambió (sin endpoints nuevos).
+
+**Datos de tarifas:** el dueño del producto entregó los valores de `calcularGastos.html` (commit `05f46f5`). Llaman la atención, y conviene confirmarlos con el negocio antes de S2-01 (se guardaron tal cual): **Buga** y **Cumbre** tienen para *empleado* los mismos valores que para *prestador* (alimentación 15.000, otros 0), y **Cali prestador** tiene `transporte_intermunicipal` 42.000 mientras Cali empleado tiene 0.
+
+### Actualización documental v0.4 (misma fecha)
 
 **2026-11-12 · Actualización integral del baseline documental (SPEC v0.4).** Por decisión explícita del dueño del producto se descongeló la documentación para incorporar cuatro cambios y el análisis de los 10 archivos de Apps Script. **No se escribió código ni migraciones.**
 
@@ -287,14 +315,15 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-06** CI en GitHub Actions: `pre-commit`, `backend` (Docker + PostgreSQL), `frontend` (Node 24) e `integracion` (Compose completo + contrato OpenAPI); actionlint; ADR-026
 - [x] **S1-07** Modelos y migración de `usuarios`, `cargos`, `celulas`, `sesiones` y `auditoria` (solo inserción con trigger); SUPERADMIN inicial por `SUPERADMIN_EMAIL`; 92 pruebas de backend
 
-- [x] **2026-11-12** Actualización documental SPEC v0.4 (ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19, DP-20)
+- [x] **2026-11-12** Actualización documental SPEC v0.4 (ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19, DP-20), commit `f695cbd`
+- [x] **2026-11-12** Tarifas oficiales de `calcularGastos.html` como datos (`05f46f5`)
+- [x] **S1-07b** Credenciales por rol en `usuarios`, `tokens_recuperacion_password`, `Settings` de correo/AWS; 153 pruebas
 
 ## Trabajo pendiente
 
-- [ ] Commit de la actualización documental v0.4 (cuando el usuario lo indique)
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: **S1-07b**, S1-08 a S1-11, S1-13 (S1-12 → semana 5)
+- [ ] Sprint 1: S1-08 a S1-11, S1-13 (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**
@@ -304,19 +333,17 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-07b** · Migración correctiva de identidad (2 h; depende de S1-07 ✅; skills `agent-skills:test-driven-development`, `engineering:system-design`). Checklist exacto en el resumen de la sesión del 2026-11-12:
+**S1-08** · Auth híbrida (6 h; depende de S1-07b ✅; skills `agent-skills:security-and-hardening`, `agent-skills:test-driven-development`). Contrato en `docs/api-design.md` §3 y `docs/architecture.md` §5:
 
-1. TDD: pruebas de restricciones primero (`CHECK` de contraseña por rol, `username` obligatorio para operativos, `google_sub` solo SUPERADMIN, hash de token de 64 hex).
-2. Alembic: `usuarios` + `username` (CITEXT único, formato), `password_hash`, `debe_cambiar_password`, `password_cambiada_at`, `intentos_fallidos`, `bloqueado_hasta`, `es_prestador_servicios`, `fecha_nacimiento`; `ck_usuarios__password_segun_rol`, `ck_usuarios__username_operativo`, `ck_usuarios__google_solo_superadmin`. **Sin** `firma_archivo_id` (llega con `archivos`, S2-02).
-3. Tabla `tokens_recuperacion_password` con `CHECK` de hash, `expires_at > created_at`, índices y privilegios (`SELECT, INSERT, UPDATE`, sin `DELETE`).
-4. Modelos SQLAlchemy y enums (`AccionAuditoria`: acciones nuevas); `audit.py` ya rechaza `password`/`token_hash`: añadir `password_hash`.
-5. Revisar el seed: `SUPERADMIN_EMAIL=john.hernandez@trulab.co` y `SUPERADMIN_NOMBRE=John Hernandez`; el SUPERADMIN queda sin `username` ni contraseña.
-6. Ajustar `Settings` (`password_reset_ttl_minutes`, `login_*`, `mail_backend`, `frontend_url`, `aws_*`) y la documentación de `backend/README.md`.
-7. Verificar: `upgrade head` → `downgrade -1` → `upgrade head` → `alembic check`, pruebas, ruff/mypy y `pre-commit`; actualizar este archivo.
+1. Dependencias exactas: `argon2-cffi`, `PyJWT`, `google-auth` (y `boto3` para el `Mailer` SES, o dejarlo para S2-07 con `MAIL_BACKEND=log`). Variable `JWT_SECRET`.
+2. `core/security.py`: Argon2id (hash, verificación, rehash si cambian los parámetros), JWT de acceso (claim `pwd_change`), refresh opaco con SHA-256, tokens de recuperación.
+3. `core/mail.py`: interfaz `Mailer` con `LogMailer` (solo `ENV=local`) y `SesMailer`.
+4. `POST /auth/login`: respuesta genérica `401 CREDENCIALES_INVALIDAS`, tiempo homogéneo (verificación ficticia), bloqueo tras `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_EXITOSO`/`LOGIN_FALLIDO`; un SUPERADMIN no entra por aquí.
+5. `POST /auth/password/forgot` (siempre 202), `reset` (consumo atómico con `UPDATE … WHERE used_at IS NULL`, revoca sesiones), `change`; `403 CAMBIO_PASSWORD_REQUERIDO` en el resto de endpoints mientras la contraseña sea temporal.
+6. `POST /auth/refresh` (rotación), `POST /auth/logout`, `GET /me`; `POST /auth/google` solo SUPERADMIN (`hd`, `email_verified`, `google_sub`), con login de desarrollo solo en `ENV=local` hasta tener el OAuth Client ID (P-3).
+7. Límite de peticiones en `/auth/*`; regenerar `src/types/api.ts` (`gen:api`) porque cambia el contrato.
 
-Después **S1-08** (6 h): auth híbrida. Dependencias nuevas: `argon2-cffi`, `google-auth`, `PyJWT` (y `boto3` cuando llegue SES/S3). Variable `JWT_SECRET`. Mientras llega el OAuth Client ID (P-3), login de desarrollo del SUPERADMIN solo con `ENV=local`.
-
-Pendiente con el usuario: commit de esta actualización documental; push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks. En paralelo, sin bloquear al desarrollador: P-3, P-6, P-7 (aportar los archivos de Apps Script y validar las tarifas), P-8, P-2 (exportación de AppSheet) y DP-21.
+Pendiente con el usuario: push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks; confirmar las tarifas de Buga, Cumbre y Cali prestador. En paralelo: P-3, P-6, P-7 (hoja `PROYECTOS`), P-8, P-2 y DP-21.
 
 ## Decisiones
 
@@ -383,6 +410,10 @@ Pendiente con el usuario: commit de esta actualización documental; push y PR pa
 ---
 
 ## Historial de sesiones
+
+### 2026-11-12 · Sesión 6: commit documental, tarifas oficiales y S1-07b
+- Commit `f695cbd` (documentación v0.4) y `05f46f5` (tarifas de `calcularGastos.html` como CSV con prueba de integridad).
+- S1-07b: migración `f7a1a890a1d3` (credenciales por rol, tokens de recuperación), seed sin contraseña para SUPERADMIN, `Settings` de correo/AWS. 153 pruebas en verde. Sin push ni merge.
 
 ### 2026-11-12 · Sesión 5: actualización integral del baseline documental (SPEC v0.4)
 - Descongelada la documentación por decisión del dueño del producto. ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19 y DP-20 nuevas, DP-21 abierta.

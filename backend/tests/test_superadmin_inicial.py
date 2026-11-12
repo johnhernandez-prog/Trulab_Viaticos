@@ -30,7 +30,11 @@ def sin_superadmin(sesion: Session) -> Session:
 
 
 def _eventos(sesion: Session, usuario: Usuario) -> list[Auditoria]:
-    return list(sesion.scalars(select(Auditoria).where(Auditoria.entidad_id == usuario.id)))
+    return list(
+        sesion.scalars(
+            select(Auditoria).where(Auditoria.entidad_id == usuario.id).order_by(Auditoria.id)
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -65,10 +69,15 @@ def test_crea_el_superadmin_y_lo_audita(sin_superadmin: Session) -> None:
         True,
         "Admin Trulab",
     )
-    [evento] = _eventos(sin_superadmin, usuario)
-    assert evento.accion == "USUARIO_CREAR"
-    assert evento.usuario_id is None
-    assert evento.datos["origen"] == "seed"
+    # Sin contraseña ni username: entra solo con Google (ADR-027).
+    assert (usuario.username, usuario.password_hash, usuario.debe_cambiar_password) == (
+        None,
+        None,
+        False,
+    )
+    eventos = _eventos(sin_superadmin, usuario)
+    assert [e.accion for e in eventos] == ["USUARIO_CREAR", "SUPERADMIN_ASIGNADO"]
+    assert all(e.usuario_id is None and e.datos["origen"] == "seed" for e in eventos)
 
 
 def test_es_idempotente(sin_superadmin: Session) -> None:
@@ -93,7 +102,10 @@ def test_no_crea_otro_si_ya_hay_un_superadmin_activo(sin_superadmin: Session) ->
 
 
 def test_promueve_y_reactiva_un_usuario_existente(sin_superadmin: Session) -> None:
-    usuario = crear_usuario(sin_superadmin, rol=Rol.VIAJERO, activo=False)
+    usuario = crear_usuario(
+        sin_superadmin, rol=Rol.VIAJERO, activo=False, debe_cambiar_password=True
+    )
+    username = usuario.username
 
     resultado = asegurar_superadmin_inicial(
         sin_superadmin, usuario.correo.upper(), "Ignorado", DOMINIO
@@ -103,9 +115,13 @@ def test_promueve_y_reactiva_un_usuario_existente(sin_superadmin: Session) -> No
     assert resultado is ResultadoSuperadmin.PROMOVIDO
     assert (usuario.rol, usuario.activo) == (Rol.SUPERADMIN, True)
     assert usuario.nombre_completo == "Ana Pérez"
-    [evento] = _eventos(sin_superadmin, usuario)
-    assert evento.accion == "ROL_CAMBIAR"
-    assert evento.datos["antes"] == {"rol": "VIAJERO", "activo": False}
+    # Al pasar a SUPERADMIN pierde la contraseña (el CHECK lo exige); el username se conserva.
+    assert (usuario.password_hash, usuario.debe_cambiar_password) == (None, False)
+    assert usuario.username == username
+    eventos = _eventos(sin_superadmin, usuario)
+    assert [e.accion for e in eventos] == ["ROL_CAMBIAR", "SUPERADMIN_ASIGNADO"]
+    assert eventos[0].datos["antes"] == {"rol": "VIAJERO", "activo": False}
+    assert "password_hash" not in str(eventos[0].datos)
 
 
 def test_un_superadmin_inactivo_no_cuenta(sin_superadmin: Session) -> None:

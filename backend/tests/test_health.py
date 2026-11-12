@@ -34,6 +34,9 @@ def test_documentacion_bajo_prefijo_versionado(client: TestClient) -> None:
 
 def test_documentacion_deshabilitada_en_produccion(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENV", "production")
+    # Fuera de local el correo debe ir por SES (ADR-028); el valor no se usa en esta prueba.
+    monkeypatch.setenv("MAIL_BACKEND", "ses")
+    monkeypatch.setenv("AWS_SES_SENDER", "viaticos@trulab.co")
     get_settings.cache_clear()
     try:
         with TestClient(create_app()) as cliente:

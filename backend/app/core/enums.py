@@ -1,4 +1,4 @@
-"""Enums fijos del sistema (docs/database-design.md §2.10).
+"""Enums fijos del sistema (docs/database-design.md §2.13).
 
 En la BD son `TEXT` + `CHECK`; este es el único módulo del backend que los define. Las listas de
 negocio (proyectos, rubros, células) NO van aquí: son tablas de catálogo (DP-14, ADR-022).

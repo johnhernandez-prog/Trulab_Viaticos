@@ -2,7 +2,7 @@
 
 > Motor: PostgreSQL 16 (Amazon RDS en staging y producción). Esquema: `public`. Migraciones solo con Alembic.
 > Modelo ajustado a la estructura real de AppSheet (DP-07 ✅, DP-13 a DP-18) y a la **fusión con la Solicitud de viáticos de Apps Script** (DP-19 ✅, DP-20 ✅, ADR-029, ADR-030) y al **acceso híbrido** (DP-01 actualizada, ADR-027). `SPEC.md` v0.4.
-> **Estado de implementación:** existen en migración `usuarios`, `cargos`, `celulas`, `sesiones` y `auditoria` (S1-07). La migración correctiva `S1-07b` añade a `usuarios` los campos de este documento y crea `tokens_recuperacion_password`. Todo lo demás (`proyectos`, `rubros`, `tarifas_viaticos`, `viaticos`, …) llega en la semana 2.
+> **Estado de implementación:** existen en migración `usuarios`, `cargos`, `celulas`, `sesiones` y `auditoria` (S1-07) y, desde **S1-07b** (`f7a1a890a1d3`), las credenciales de `usuarios` (salvo `firma_archivo_id`, que llega con `archivos` en S2-02) y `tokens_recuperacion_password`. Todo lo demás (`proyectos`, `rubros`, `tarifas_viaticos`, `viaticos`, …) llega en la semana 2.
 
 ---
 
@@ -81,11 +81,11 @@ Columnas comunes a **todas** las tablas operativas ("columnas base"):
 | *columnas base* | | |
 | `nombre_completo` | `TEXT` | `NOT NULL` |
 | `correo` | `CITEXT` | `UNIQUE NOT NULL`. Es el **contacto y destino de la recuperación** de contraseña. Para `SUPERADMIN` debe ser del dominio `GOOGLE_WORKSPACE_DOMAIN` (`@trulab.co`); lo valida el service, porque el dominio es configuración. Operativos: correo personal o corporativo |
-| **`username`** | `CITEXT NULL` | **Único.** Obligatorio para `VIAJERO`/`ADMIN`/`FINANCIERO` (`ck_usuarios__username_operativo`: `rol = 'SUPERADMIN' OR username IS NOT NULL`). Formato `^[a-z0-9._-]{3,40}$`. `NULL` para SUPERADMIN |
-| **`password_hash`** | `VARCHAR(255) NULL` | Hash **Argon2id** (formato PHC, `$argon2id$…`). `CHECK ck_usuarios__password_segun_rol`: `(rol <> 'SUPERADMIN' AND password_hash IS NOT NULL) OR (rol = 'SUPERADMIN' AND password_hash IS NULL)`. Nunca se registra en logs ni auditoría |
-| **`debe_cambiar_password`** | `BOOLEAN` | `NOT NULL DEFAULT false`. `true` mientras la contraseña sea temporal (alta o restablecimiento por ADMIN). Siempre `false` para SUPERADMIN |
+| **`username`** | `CITEXT NULL` | **Único.** Obligatorio para `VIAJERO`/`ADMIN`/`FINANCIERO` (`ck_usuarios__username_operativo`: `rol = 'SUPERADMIN' OR username IS NOT NULL`). Formato `^[a-z0-9._-]{3,40}$` en minúsculas (`ck_usuarios__username_formato`, sobre `username::text`; la búsqueda sigue sin distinguir mayúsculas). `NULL` para un SUPERADMIN nuevo; uno promovido puede conservarlo |
+| **`password_hash`** | `VARCHAR(255) NULL` | Hash **Argon2id** (formato PHC, `$argon2id$…`; `ck_usuarios__password_argon2id` rechaza cualquier otro formato). `CHECK ck_usuarios__password_segun_rol`: `(rol <> 'SUPERADMIN' AND password_hash IS NOT NULL) OR (rol = 'SUPERADMIN' AND password_hash IS NULL)`. Nunca se registra en logs ni auditoría |
+| **`debe_cambiar_password`** | `BOOLEAN` | `NOT NULL DEFAULT false`. `true` mientras la contraseña sea temporal (alta o restablecimiento por ADMIN). Siempre `false` para SUPERADMIN (`ck_usuarios__superadmin_sin_cambio_password`) |
 | **`password_cambiada_at`** | `TIMESTAMPTZ NULL` | Último cambio de contraseña |
-| **`intentos_fallidos`** | `SMALLINT` | `NOT NULL DEFAULT 0`. Se reinicia al ingresar bien (S-14, *Propuesta*) |
+| **`intentos_fallidos`** | `SMALLINT` | `NOT NULL DEFAULT 0`, `CHECK (>= 0)`. Se reinicia al ingresar bien (S-14, *Propuesta*) |
 | **`bloqueado_hasta`** | `TIMESTAMPTZ NULL` | Bloqueo temporal por intentos fallidos (S-14, *Propuesta*) |
 | `cedula` | `TEXT NULL` | Única entre los no eliminados; dato personal |
 | `celula_id` | `UUID NULL` FK → `celulas.id` | `RESTRICT` |

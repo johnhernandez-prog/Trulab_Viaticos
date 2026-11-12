@@ -14,6 +14,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from app.core.enums import Rol
 from app.modules.auth.models import Sesion
 from app.modules.cargos.models import Cargo
 from app.modules.catalogos.models import Celula
@@ -109,10 +110,11 @@ def test_cedula_unica_entre_no_eliminados(sesion: Session) -> None:
 
 
 def test_google_sub_unico(sesion: Session) -> None:
-    crear_usuario(sesion, google_sub="108234567890123456789")
+    # Solo un SUPERADMIN entra con Google (ADR-027).
+    crear_usuario(sesion, rol=Rol.SUPERADMIN, google_sub="108234567890123456789")
 
     with pytest.raises(IntegrityError, match="uq_usuarios__google_sub"):
-        crear_usuario(sesion, google_sub="108234567890123456789")
+        crear_usuario(sesion, rol=Rol.SUPERADMIN, google_sub="108234567890123456789")
 
 
 def test_usuario_con_cargo_y_celula(sesion: Session) -> None:

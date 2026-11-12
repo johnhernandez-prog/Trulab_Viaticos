@@ -43,7 +43,10 @@ def asegurar_superadmin_inicial(
     - Si ya hay un SUPERADMIN activo: no hace nada. Así la variable de entorno no sirve para
       crear superadministradores adicionales; los siguientes se gestionan desde la app (S1-10).
     - Si no lo hay: crea el usuario o, si el correo ya existe, lo promueve y reactiva
-      (recuperación de acceso). Ambos casos quedan en `auditoria` con `origen = seed`.
+      (recuperación de acceso). Ambos casos quedan en `auditoria` con `origen = seed`, más
+      `SUPERADMIN_ASIGNADO` (RN-12).
+    - El SUPERADMIN no tiene contraseña: entra solo con Google (ADR-027). Al promover a un
+      operativo se borra su contraseña en la misma operación (lo exige el `CHECK` por rol).
     """
     if not correo.strip():
         return ResultadoSuperadmin.OMITIDO_SIN_CORREO
@@ -73,12 +76,18 @@ def asegurar_superadmin_inicial(
             usuario.id,
             datos={"origen": "seed", "correo": correo, "rol": Rol.SUPERADMIN.value},
         )
+        _auditar_superadmin_asignado(session, usuario)
         return ResultadoSuperadmin.CREADO
 
     antes = {"rol": existente.rol, "activo": existente.activo}
     existente.rol = Rol.SUPERADMIN
     existente.activo = True
     existente.deleted_at = None
+    # Sin contraseña ni cambio pendiente: desde ahora entra con Google (ADR-027).
+    existente.password_hash = None
+    existente.debe_cambiar_password = False
+    existente.intentos_fallidos = 0
+    existente.bloqueado_hasta = None
     session.flush()
     registrar(
         session,
@@ -91,4 +100,15 @@ def asegurar_superadmin_inicial(
             "despues": {"rol": Rol.SUPERADMIN.value, "activo": True},
         },
     )
+    _auditar_superadmin_asignado(session, existente)
     return ResultadoSuperadmin.PROMOVIDO
+
+
+def _auditar_superadmin_asignado(session: Session, usuario: Usuario) -> None:
+    registrar(
+        session,
+        AccionAuditoria.SUPERADMIN_ASIGNADO,
+        "usuarios",
+        usuario.id,
+        datos={"origen": "seed", "correo": usuario.correo},
+    )

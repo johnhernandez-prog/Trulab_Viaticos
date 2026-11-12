@@ -153,8 +153,9 @@ def test_purga_de_usuario_deja_la_auditoria_sin_actor(owner: Connection) -> None
     # Purga física (manual, fuera del MVP): la FK hace SET NULL y el trigger lo admite.
     usuario_id = owner.execute(
         text(
+            # SUPERADMIN: no necesita username ni contraseña (ADR-027).
             "INSERT INTO usuarios (nombre_completo, correo, rol) "
-            "VALUES ('Purga', 'purga-prueba@trulab.co', 'VIAJERO') RETURNING id"
+            "VALUES ('Purga', 'purga-prueba@trulab.co', 'SUPERADMIN') RETURNING id"
         )
     ).scalar_one()
     evento_id = _insertar_evento(owner, usuario_id)
@@ -174,7 +175,8 @@ def test_privilegios_de_trulab_app_en_tablas_de_identidad(owner: Connection) -> 
             "SELECT table_name, string_agg(privilege_type, ',' ORDER BY privilege_type) "
             "FROM information_schema.role_table_grants "
             "WHERE grantee = 'trulab_app' AND table_name IN "
-            "('usuarios', 'cargos', 'celulas', 'sesiones', 'auditoria') "
+            "('usuarios', 'cargos', 'celulas', 'sesiones', 'auditoria', "
+            "'tokens_recuperacion_password') "
             "GROUP BY table_name"
         )
     ).all()
@@ -185,4 +187,6 @@ def test_privilegios_de_trulab_app_en_tablas_de_identidad(owner: Connection) -> 
         "celulas": "INSERT,SELECT,UPDATE",
         "sesiones": "DELETE,INSERT,SELECT,UPDATE",
         "auditoria": "INSERT,SELECT",
+        # Se invalidan con `used_at`, no se borran (S1-07b).
+        "tokens_recuperacion_password": "INSERT,SELECT,UPDATE",
     }

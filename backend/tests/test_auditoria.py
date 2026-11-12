@@ -47,6 +47,12 @@ def test_sanear_enmascara_la_cedula_en_cualquier_nivel() -> None:
         {"lista": [{"token_hash": "x"}]},
         {"Authorization": "Bearer x"},
         {"cookie": "trulab_refresh=x"},
+        # Acceso híbrido (ADR-027): nunca contraseñas, hashes ni tokens de recuperación.
+        {"antes": {"password_hash": "$argon2id$..."}},
+        {"nueva_password": "x"},
+        {"password_actual": "x"},
+        {"password_temporal": "x"},
+        {"reset_token": "x"},
     ],
 )
 def test_sanear_rechaza_secretos(datos: dict[str, object]) -> None:

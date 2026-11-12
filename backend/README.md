@@ -20,7 +20,7 @@ backend/
 │       ├── auth/          # models: sesiones (refresh tokens; endpoints en S1-08)
 │       ├── cargos/        # models: cargos (folio CA-000001)
 │       ├── catalogos/     # models: celulas (proyectos y rubros llegan con los gastos)
-│       └── usuarios/      # models, service (SUPERADMIN inicial), seed (comando)
+│       └── usuarios/      # models (credenciales por rol, ADR-027), service (SUPERADMIN inicial), seed
 ├── alembic/           # migraciones (S1-04)
 │   ├── env.py             # conexión con trulab_owner y descubrimiento automático de modelos
 │   ├── script.py.mako     # plantilla de migraciones nuevas
@@ -59,7 +59,7 @@ docker compose exec api mypy app tests alembic
 - **FK circulares** (una tabla referencia a `usuarios` en `created_by` y `usuarios` la referencia a ella): la FK de `usuarios` lleva `use_alter=True` y la migración la crea al final con `op.create_foreign_key`. `--autogenerate` no ordena bien estos casos: revisar el orden de `create_table`.
 - **Defaults con `nextval()`** (folios): `alembic check` los omite (`_comparar_default` en `env.py`), porque compararlos consumiría la secuencia y siempre parecerían cambiados.
 - Los nombres de constraints e índices salen de la `naming_convention` (`docs/database-design.md` §9): no se escriben a mano. Los `CheckConstraint` sí llevan `name="regla"` y quedan como `ck_<tabla>__<regla>`.
-- Cada tabla nueva que crea `trulab_owner` le da a `trulab_app` **solo** `SELECT, INSERT, UPDATE, DELETE` (y `USAGE, SELECT` sobre sus secuencias) por los privilegios por defecto de la migración inicial. Las tablas de solo inserción (`auditoria`, `legalizacion_eventos`) deben ejecutar `REVOKE UPDATE, DELETE ... FROM trulab_app` en su migración. Las políticas RLS (`... TO trulab_app`) se crean también en migraciones (S2-03).
+- Cada tabla nueva que crea `trulab_owner` le da a `trulab_app` **solo** `SELECT, INSERT, UPDATE, DELETE` (y `USAGE, SELECT` sobre sus secuencias) por los privilegios por defecto de la migración inicial. Las tablas de solo inserción (`auditoria`, `viatico_eventos`) deben ejecutar `REVOKE UPDATE, DELETE ... FROM trulab_app` en su migración. Las políticas RLS (`... TO trulab_app`) se crean también en migraciones (S2-03).
 - Una migración publicada (en `main`) no se edita: se corrige con otra nueva. Siempre se escribe `downgrade()`.
 - Revisar siempre lo que genera `--autogenerate` (no detecta, entre otros, cambios de nombre de columnas ni `CHECK`). Datos, vistas, funciones, RLS y privilegios van con `op.execute(...)`.
 
@@ -83,6 +83,23 @@ docker compose exec api mypy app tests alembic
 
 - Vacío: no hace nada. Debe ser del dominio `GOOGLE_WORKSPACE_DOMAIN`; si no, `migrate` termina con código 1 y la API no arranca.
 - **Solo actúa si no hay ningún SUPERADMIN activo.** La variable no sirve para crear superadministradores adicionales; los demás se gestionan desde la app (S1-10).
-- Si el correo ya existe, lo promueve a SUPERADMIN y lo reactiva (recuperación de acceso). Crear y promover quedan en `auditoria` con `origen = seed` y sin actor.
+- Si el correo ya existe, lo promueve a SUPERADMIN y lo reactiva (recuperación de acceso); al promoverlo le **quita la contraseña** (el SUPERADMIN entra solo con Google, ADR-027). Crear y promover quedan en `auditoria` (`USUARIO_CREAR` o `ROL_CAMBIAR`, más `SUPERADMIN_ASIGNADO`) con `origen = seed` y sin actor.
+- En `.env.example` el valor es el del creador del sistema: `SUPERADMIN_EMAIL=john.hernandez@trulab.co`, `SUPERADMIN_NOMBRE=John Hernandez`. El código no tiene ese valor por defecto.
 - Se conecta como `trulab_app` (crear un usuario es una operación de la aplicación). El correo no va al log.
 - A mano: `docker compose run --rm migrate python -m app.modules.usuarios.seed`.
+
+## Credenciales por rol (S1-07b, ADR-027)
+
+La BD garantiza el acceso híbrido con `CHECK` en `usuarios`:
+
+| Regla | Constraint |
+| :--- | :--- |
+| Operativo (VIAJERO/ADMIN/FINANCIERO) ⇒ `password_hash` obligatorio; SUPERADMIN ⇒ sin contraseña | `ck_usuarios__password_segun_rol` |
+| `password_hash` solo en formato PHC de Argon2id (`$argon2id$…`): nunca una contraseña en claro | `ck_usuarios__password_argon2id` |
+| Operativo ⇒ `username` obligatorio, en minúsculas `^[a-z0-9._-]{3,40}$` (CITEXT único) | `ck_usuarios__username_operativo`, `ck_usuarios__username_formato` |
+| Solo SUPERADMIN puede tener `google_sub` | `ck_usuarios__google_solo_superadmin` |
+| SUPERADMIN nunca tiene cambio de contraseña pendiente | `ck_usuarios__superadmin_sin_cambio_password` |
+
+Un cambio de rol debe ajustar las credenciales en la misma operación. `tokens_recuperacion_password` guarda solo el SHA-256 del token (`CHECK` de 64 hex) y `trulab_app` no tiene `DELETE`: se invalidan con `used_at`. En pruebas, `tests/fabricas.py::crear_usuario` da a los operativos un `username` y un hash Argon2id ficticio (`HASH_FICTICIO`).
+
+`Settings` (`app/core/config.py`) rechaza al arrancar: `MAIL_BACKEND=log` fuera de `ENV=local`, `MAIL_BACKEND=ses` sin `AWS_SES_SENDER`, `STORAGE_BACKEND=s3` sin `AWS_S3_BUCKET` y `PASSWORD_RESET_TTL_MINUTES` fuera de 15–30.

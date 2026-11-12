@@ -4,8 +4,8 @@
   trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` incluso para el dueño del esquema.
 - `registrar()` agrega la fila a la sesión del llamador: se guarda en la **misma transacción**
   que el cambio auditado (si el cambio se revierte, su auditoría también).
-- `datos` nunca lleva secretos (tokens, contraseñas, cookies) ni la cédula completa: `registrar()`
-  rechaza las claves prohibidas y enmascara la cédula.
+- `datos` nunca lleva secretos (tokens, contraseñas y sus hashes, cookies) ni la cédula
+  completa: `registrar()` rechaza las claves prohibidas y enmascara la cédula.
 
 Solo la consulta SUPERADMIN (endpoint en S1-10).
 """
@@ -38,6 +38,12 @@ class AccionAuditoria(StrEnum):
     CATALOGO_EDITAR = "CATALOGO_EDITAR"
     CATALOGO_DESACTIVAR = "CATALOGO_DESACTIVAR"
     ACCESO_DENEGADO = "ACCESO_DENEGADO"
+    # Acceso híbrido (ADR-027).
+    LOGIN_EXITOSO = "LOGIN_EXITOSO"
+    LOGIN_FALLIDO = "LOGIN_FALLIDO"
+    PASSWORD_CAMBIADA = "PASSWORD_CAMBIADA"  # noqa: S105 (nombre de acción, no un secreto)
+    PASSWORD_RECUPERACION_SOLICITADA = "PASSWORD_RECUPERACION_SOLICITADA"  # noqa: S105
+    SUPERADMIN_ASIGNADO = "SUPERADMIN_ASIGNADO"
 
 
 class Auditoria(Base):
@@ -73,6 +79,11 @@ CLAVES_PROHIBIDAS = frozenset(
         "id_token",
         "token_hash",
         "password",
+        "password_hash",
+        "password_actual",
+        "nueva_password",
+        "password_temporal",
+        "reset_token",
         "contrasena",
         "contraseña",
         "secret",
