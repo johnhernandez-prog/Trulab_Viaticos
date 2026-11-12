@@ -16,7 +16,7 @@
 | P-2 | Exportar desde AppSheet los **datos** de las 5 tablas en CSV y los soportes (imágenes y PDF), y confirmar dónde se guardan. La estructura ya está validada (DP-07 ✅) | Dueño del producto / admin AppSheet |
 | P-3 | Crear el proyecto en Google Cloud Console y el **OAuth Client ID** (web) con los orígenes local y de producción | Admin de Google Workspace |
 | P-4 | Entregar el logo y la paleta corporativa (DP-08) | Comunicaciones |
-| P-5 | Instalar Docker Desktop, Node 20 LTS, Python 3.12 y el CLI `gh` en el equipo de desarrollo | Desarrollador |
+| P-5 | Instalar Docker Desktop, Node 24 LTS (ADR-026; antes Node 20), Python 3.12 y el CLI `gh` en el equipo de desarrollo | Desarrollador |
 
 ---
 

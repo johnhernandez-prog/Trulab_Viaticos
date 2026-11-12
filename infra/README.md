@@ -15,7 +15,7 @@ infra/
 
 ## Entorno local
 
-1. Copiar `/.env.example` a `/.env` y completar las tres contraseñas (`POSTGRES_PASSWORD`, `OWNER_DB_PASSWORD`, `APP_DB_PASSWORD`, distintas) y ponerlas también en `DATABASE_URL_MIGRATIONS` y `DATABASE_URL`.
+1. Crear `/.env` con `python scripts/crear_env.py` (en Windows, `.venv\Scripts\python scripts\crear_env.py`): copia `/.env.example` con tres contraseñas aleatorias y distintas (`POSTGRES_PASSWORD`, `OWNER_DB_PASSWORD`, `APP_DB_PASSWORD`), que también pone en `DATABASE_URL_MIGRATIONS` y `DATABASE_URL`. A mano: copiar `/.env.example` y completar lo mismo.
 2. Desde la **raíz** del repositorio (el `.env` define `COMPOSE_FILE`):
 
 | Comando | Qué levanta |

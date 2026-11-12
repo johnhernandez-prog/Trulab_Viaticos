@@ -6,7 +6,8 @@
 # Ejecución manual: .venv\Scripts\pre-commit run --all-files
 #
 # Hooks genéricos (S1-01), ruff (S1-01), mypy del backend (S1-03; incluye alembic/ desde S1-04) y
-# Prettier, ESLint y tsc del frontend (S1-05). CI los ejecuta igualmente (S1-06).
+# Prettier, ESLint y tsc del frontend (S1-05) y actionlint (S1-06). El job `pre-commit` de la CI
+# (.github/workflows/ci.yml) ejecuta exactamente estos hooks.
 # Los del frontend usan frontend/node_modules del equipo: antes, una vez, `npm ci` en frontend/
 # (Node 24, ver frontend/README.md).
 
@@ -55,6 +56,12 @@ repos:
           - alembic==1.13.3
           - pytest==8.3.3
           - httpx==0.27.2
+
+  # Workflows de GitHub Actions (S1-06). El hook compila actionlint con Go (pre-commit lo instala).
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
 
   - repo: local
     hooks:

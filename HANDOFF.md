@@ -8,12 +8,49 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1 base técnica). Documentación congelada (baseline `62b91cf`) |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-05 ✅ terminadas**; S1-06 a S1-13 pendientes |
-| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; sin tablas de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-05 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-06 ✅ terminadas**; S1-07 a S1-13 pendientes |
+| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); sin tablas de negocio ni pantallas funcionales |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline publicado en GitHub). S1-01 a S1-06 están en la rama **`feat/f1-estructura-monorepo`** (sin push ni merge) |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**S1-06 · Integración continua (GitHub Actions).** Workflow `.github/workflows/ci.yml` (`CI`), con cuatro jobs que deben pasar todos:
+
+| Job | Qué valida | Cómo |
+| :--- | :--- | :--- |
+| `pre-commit` | Los mismos hooks que en local: genéricos, ruff, ruff-format, mypy, actionlint, Prettier, ESLint y tsc | Python de `.python-version`, Node de `frontend/.nvmrc`, `npm ci` del frontend y `pre-commit run --all-files --show-diff-on-failure` |
+| `backend` | Imagen Docker del backend; ruff, `ruff format --check` y mypy strict dentro del contenedor; migraciones (`alembic check`, `downgrade base`, `upgrade head`, `alembic check`); **pytest completo** (28, sin omitidas, también las que usan `trulab_owner`); `/health` con `trulab_app` | Docker Compose (`db` + `migrate` + `api`) con PostgreSQL 16.4 real y los roles creados por `10-roles.sh`, igual que en local |
+| `frontend` | ESLint, `tsc -b`, Prettier, Vitest (17) y build de producción | Node 24 en el runner (`frontend/.nvmrc`), `npm ci` |
+| `integracion` (necesita `backend` y `frontend`) | Construye todas las imágenes y levanta el entorno completo; humo de la SPA, del respaldo de rutas, del proxy `/api` y de `openapi.json`; **contrato**: regenera `src/types/api.ts` desde la API real y falla si difiere del versionado | `docker compose up -d --wait`, `curl`, `npm run gen:api` y `git diff --exit-code` |
+
+- **Disparadores:** `push` a `main`, `feat/**` y `fix/**`; `pull_request` hacia `main`; `workflow_dispatch`. `concurrency` por flujo, evento y rama, con `cancel-in-progress` (un push nuevo cancela el anterior de la misma rama sin cancelar la ejecución del PR).
+- **Seguridad:** `permissions: contents: read`; actions oficiales **fijadas por SHA** con su versión en comentario (`checkout` v7.0.1, `setup-python` v7.1.0, `setup-node` v7.1.0, `cache` v6.1.0); sin secretos (el `.env` de CI se genera con contraseñas aleatorias en cada job); `timeout-minutes` en todos los jobs.
+- **Fallo ante errores:** cada paso corre con `bash -eo pipefail`; cualquier comando con código distinto de 0 detiene el job y la pipeline. Si falla, se vuelcan los logs de los contenedores; el entorno se baja siempre (`down -v`).
+- **Archivos nuevos:** `.github/workflows/ci.yml`, `scripts/crear_env.py` (crea `.env` desde `.env.example` con contraseñas aleatorias; lo usan la CI y el equipo) y `frontend/.nvmrc` (`24.22.1`).
+- **pre-commit:** nuevo hook **actionlint** v1.7.12 (valida los workflows).
+- **ADR-026** (Node 24 LTS como runtime estándar, aprobado por el dueño del producto el 2026-11-12) en `docs/architecture.md` §13, y P-5 de `SPRINTS.md` actualizada. Son los únicos cambios a documentos del baseline, por decisión explícita del dueño.
+- Documentación: `scripts/README.md`, `infra/README.md` (paso 1 con `crear_env.py`), este archivo y `CLAUDE.md`.
+
+**Decisiones técnicas de S1-06:**
+- **El backend se valida en Docker Compose, no con un servicio `postgres` de GitHub ni con Python del runner.** Así la CI ejecuta exactamente los comandos de local (ADR-016), usa la imagen real (WeasyPrint/Pango incluidos), prueba `10-roles.sh`, el servicio `migrate` y los roles con mínimo privilegio, y no duplica configuración. El costo es construir la imagen en cada ejecución (unos segundos con caché; sin caché de capas entre ejecuciones por ahora).
+- **`pytest` del backend corre en el contenedor `migrate`**, que tiene `DATABASE_URL` (trulab_app) y `DATABASE_URL_MIGRATIONS` (trulab_owner): se ejecutan las 28 pruebas, ninguna omitida.
+- **Ida y vuelta de migraciones en CI:** la BD es efímera, así que `downgrade base` → `upgrade head` es seguro aquí (en local se evita porque borraría datos).
+- **Contrato frontend ↔ backend en `integracion`:** si un cambio de la API no regenera `src/types/api.ts`, la CI falla con un mensaje que indica el comando.
+- **Hooks y jobs se solapan a propósito:** ruff, mypy, ESLint y tsc corren en `pre-commit` (con las mismas versiones que el desarrollador) y también en `backend`/`frontend` (con las versiones de la imagen y del lock). El costo es bajo y cada job queda autocontenido y legible.
+- **`chmod -R a+rwX`** sobre el código en los jobs de Docker: en el runner el código pertenece a otro uid y los contenedores corren como uid 1000 (cachés de ruff, mypy y pytest; `gen:api`). El runner es efímero.
+- **actionlint como hook de pre-commit** (compilado con Go por pre-commit) en lugar de solo en CI: los errores de workflow se detectan antes del push.
+
+**Validaciones de S1-06:**
+- `actionlint` 1.7.12 (imagen Docker oficial, con shellcheck): sin hallazgos. Hook de pre-commit `actionlint`: en verde.
+- **Pipeline ejecutada en local:** un script lee `ci.yml` y ejecuta los pasos `run:` de cada job tal como están escritos (Git Bash con `-eo pipefail`, `.env` borrado al empezar cada job; los pasos `uses:` se cubren con el `.venv` de Python 3.12 y Node 24 del equipo). `act` no se usó: sus contenedores no comparten las rutas de Windows que necesitan los volúmenes de Compose.
+  - Primera pasada: `pre-commit` **falló** porque `ruff-format` corrigió `scripts/crear_env.py` y mostró el diff (`--show-diff-on-failure`). Prueba real de que la pipeline se detiene ante un error de formato. Corregido.
+  - `backend`: OK (imágenes, `up --wait`, ruff, mypy, migraciones de ida y vuelta, `alembic check`, **28/28 pruebas**, `/health` con `trulab_app`).
+  - `frontend`: OK (ESLint, tsc, Prettier, **17/17 pruebas**, build).
+  - `integracion`: OK (entorno completo *healthy*, SPA, rutas, proxy `/api`, `openapi.json`, tipos al día).
+  - Segunda pasada de `pre-commit`: OK (17 hooks, incluido actionlint).
+- `docker compose up -d --wait` (con y sin lista de servicios) espera a que `migrate` termine con 0 y a que el resto esté *healthy*; devuelve error si algo falla.
+- Pendiente de comprobar en GitHub: la primera ejecución real ocurrirá con el primer push o PR (no se hizo push, por instrucción).
 
 **S1-05 · Frontend esqueleto.** SPA operativa en el contenedor `frontend` (http://localhost:5173):
 - **Stack con versiones exactas:** React 18.3.1, Vite 6.4.5, TypeScript 5.9.3 (strict, `noUncheckedIndexedAccess`), Tailwind 3.4.19 + `tailwindcss-animate`, shadcn/ui (`components.json`, Radix Slot, CVA, `tailwind-merge` 2), React Router 7.18.5 (modo librería), TanStack Query 5.105.0, Lucide, Inter variable (`@fontsource-variable/inter`). Calidad: ESLint 10.13 (flat config con reglas de tipos, `react-hooks` 7 y `react-refresh`), Prettier 3.9.10, Vitest 3.2.7 + Testing Library + jsdom, `openapi-typescript` 7.13.
@@ -168,20 +205,22 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-03** Backend esqueleto: FastAPI, config, db, health, problem+json, X-Request-ID, logs JSON; 13 pruebas
 - [x] **S1-04** Alembic con `naming_convention`, roles `trulab_owner`/`trulab_app` con mínimo privilegio, extensiones `citext`/`pgcrypto`, servicio `migrate`; 28 pruebas
 - [x] **S1-05** Frontend esqueleto: Vite, React 18, TS, Tailwind, shadcn/ui, tokens, React Router, TanStack Query, `apiClient`, tipos desde OpenAPI; contenedor `frontend` sin perfil (Node 24); 17 pruebas
+- [x] **S1-06** CI en GitHub Actions: `pre-commit`, `backend` (Docker + PostgreSQL), `frontend` (Node 24) e `integracion` (Compose completo + contrato OpenAPI); actionlint; ADR-026
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-06 a S1-13
-- [ ] Confirmar Node 24 LTS en lugar de Node 20 (P-5 de `SPRINTS.md`), decidido en S1-05
+- [ ] Sprint 1: S1-07 a S1-13
+- [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
+- [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID de Google Workspace), P-4 (logo y paleta), P-5 (entorno de desarrollo)
 - [ ] Validar los supuestos S-01 a S-08, salvo S-06 que ya es RN-27 (`SPEC.md` §17.3), con ADMIN y FINANCIERO, a más tardar en la demo de la semana 2
 - [ ] Semanas 2 a 4
 
 ## Próxima tarea sugerida
 
-**S1-06** · CI en GitHub Actions (2 h; depende de S1-03 y S1-05, ya cumplidas; skill `agent-skills:ci-cd-and-automation`): backend con ruff, mypy y pytest sobre PostgreSQL de servicio (debe crear los roles con `infra/db/init/10-roles.sh` y ejecutar `alembic upgrade head` con `trulab_owner` antes de las pruebas, y correr también las de `test_migraciones.py`); frontend con Node 24, `npm ci`, `lint`, `typecheck`, `format:check`, `test` y `build`. Alternativa: **S1-07** (migración `cargos`, `usuarios`, `sesiones` y `auditoria`, más el seed del primer SUPERADMIN). En paralelo, sin bloquear al desarrollador:
+**S1-07** · Migración `cargos`, `usuarios`, `sesiones` y `auditoria`, más el seed del primer SUPERADMIN por variable de entorno (2 h; depende de S1-04; skill `agent-skills:test-driven-development`). Modelos en `app/modules/<dominio>/models.py` heredando de `Base`, `docker compose run --rm migrate alembic revision --autogenerate -m "..."` y, en `auditoria`, revocar `UPDATE`/`DELETE` a `trulab_app`. La CI ya valida la ida y vuelta de las migraciones nuevas. Antes o después, con el usuario: **push de la rama y PR** para la primera ejecución real de la CI en GitHub, y **proteger `main`** exigiendo los checks `pre-commit`, `backend (Docker + PostgreSQL)`, `frontend (Node 24)` e `integración (Docker Compose)`. En paralelo, sin bloquear al desarrollador:
 1. Solicitar a un administrador de Google Workspace el **OAuth Client ID** (P-3). Mientras tanto se usa el login de desarrollo local (R1.1).
 2. Solicitar la **exportación de datos** de AppSheet (P-2), incluidos los valores distintos de Proyecto, Rubro y Célula.
 3. Decidir **DP-05** (hosting) antes de cerrar la semana 2.
