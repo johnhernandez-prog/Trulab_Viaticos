@@ -100,7 +100,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 
 | Método | Ruta | Roles | Notas |
 | :--- | :--- | :--- | :--- |
-| GET | `/catalogos` | V F A S | `{proyectos: [{id, nombre, codigo, exige_formato_prestador}], rubros: [...], celulas: [...], ciudades: [...]}` solo **activos**, para los selectores. `ciudades` = destinos con tarifa activa para el tipo de vinculación del usuario |
+| GET | `/catalogos` | V F A S | `{proyectos: [{id, nombre, codigo, exige_formato_prestador}], rubros: [...], celulas: [...], ciudades: [...]}` solo **activos**, para los selectores. La opción **"Otro"** de proyecto **no** viene en la lista: la UI la agrega siempre al final (ADR-031). `ciudades` = destinos con tarifa activa para el tipo de vinculación del usuario |
 | GET | `/catalogos/{tipo}` | S | Todos, con `uso` |
 | POST | `/catalogos/{tipo}` | S | `{nombre, orden?}`; para `proyectos` también `{codigo?, exige_formato_prestador?}`. `409 DUPLICADO` |
 | PATCH | `/catalogos/{tipo}/{id}` | S | Renombrar, ordenar; auditado |
@@ -117,9 +117,9 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 
 | Método | Ruta | Roles | Notas |
 | :--- | :--- | :--- | :--- |
-| GET | `/viaticos` | V (propios) F A S (todos) | Filtros: `modalidad`, `etapa`, `estado`, `estado_financiero`, `devuelta`, `usuario_id` (no V), `proyecto_id`, `desde`, `hasta` (sobre `fecha_legalizacion`), `q` (folio/motivo); orden `-fecha_legalizacion` |
-| POST | `/viaticos` | V F A S | `{modalidad, motivo_viaje, …}`. **`CON_SOLICITUD`:** `{proyecto_id, lider_proyecto, empresa?, requiere_tiquete, requiere_gastos_viaje, comentarios?, trayectos: [{orden, ciudad_origen, ciudad_destino, fecha_ida, fecha_regreso, requiere_hospedaje, dias_estadia}]}` (1–5). El servidor calcula las tarifas, el `presupuesto_solicitado` y las instantáneas; **rechaza** importes enviados por el cliente. Crea en etapa `SOLICITUD`, `estado = PENDIENTE`. **`LEGALIZACION_DIRECTA`:** `{motivo_viaje, recursos_propios}`; crea en etapa `LEGALIZACION`. Los `colaborador_*` se copian del usuario (RN-17). Folio `VT-` |
-| POST | `/viaticos/calcular-presupuesto` | V F A S | **Vista previa sin guardar** (RN-29): `{proyecto_id, requiere_gastos_viaje, trayectos: […]}` → `{aplica, motivo_no_aplica?, trayectos: [{subtotal_estadia, transporte_aeropuerto, transporte_intermunicipal, …}], presupuesto_solicitado, exige_formato_prestador}`. Usa `es_prestador_servicios` del usuario autenticado. Es la misma función que usa `POST /viaticos`, por lo que la UI y el guardado coinciden |
+| GET | `/viaticos` | V (propios) F A S (todos) | Filtros: `modalidad`, `etapa`, `estado`, `estado_financiero`, `devuelta`, `usuario_id` (no V), `proyecto_id`, `proyecto_otro` (texto, no V), `desde`, `hasta` (sobre `fecha_legalizacion`), `q` (folio/motivo); orden `-fecha_legalizacion` |
+| POST | `/viaticos` | V F A S | `{modalidad, motivo_viaje, …}`. **`CON_SOLICITUD`:** `{proyecto_id | proyecto_otro, lider_proyecto, empresa?, requiere_tiquete, requiere_gastos_viaje, comentarios?, trayectos: [{orden, ciudad_origen, ciudad_destino, fecha_ida, fecha_regreso, requiere_hospedaje, dias_estadia}]}` (1–5). El servidor calcula las tarifas, el `presupuesto_solicitado` y las instantáneas; **rechaza** importes enviados por el cliente. Crea en etapa `SOLICITUD`, `estado = PENDIENTE`. **`LEGALIZACION_DIRECTA`:** `{motivo_viaje, recursos_propios}`; crea en etapa `LEGALIZACION`. Los `colaborador_*` se copian del usuario (RN-17). Folio `VT-` |
+| POST | `/viaticos/calcular-presupuesto` | V F A S | **Vista previa sin guardar** (RN-29): `{proyecto_id | proyecto_otro, requiere_gastos_viaje, trayectos: […]}` → `{aplica, motivo_no_aplica?, trayectos: [{subtotal_estadia, transporte_aeropuerto, transporte_intermunicipal, …}], presupuesto_solicitado, exige_formato_prestador}`. Usa `es_prestador_servicios` del usuario autenticado. Es la misma función que usa `POST /viaticos`, por lo que la UI y el guardado coinciden |
 | GET | `/viaticos/{id}` | dueño, F A S | Incluye modalidad, etapa, `estado`, `estado_financiero`, solicitud y `trayectos`, `valor_asignado`, `valor_transferido`, `presupuesto_solicitado`, totales, saldo, `acciones_permitidas` y `eventos` |
 | PATCH | `/viaticos/{id}` | dueño (`estado = PENDIENTE`) | En etapa `SOLICITUD`: campos de la solicitud y `trayectos` completos (se recalcula). En etapa `LEGALIZACION`: `motivo_viaje`; `recursos_propios` solo con `estado_financiero = PENDIENTE` (S-05) |
 | PUT/DELETE | `/viaticos/{id}/firma` · `/formato-adjunto` | dueño (`estado = PENDIENTE`, etapa `SOLICITUD`) | Multipart: firma (imagen) o formato de prestador (PDF/XLSX). La firma puede copiarse del perfil con `?desde_perfil=true` (RN-32, RN-33) |
@@ -142,7 +142,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | Método | Ruta | Roles | Notas |
 | :--- | :--- | :--- | :--- |
 | GET | `/viaticos/{id}/gastos` | dueño, F A S | `tiene_comprobante` por gasto (RN-21) |
-| POST | `/viaticos/{id}/gastos` | dueño (`etapa = LEGALIZACION`, `estado = PENDIENTE`) | `multipart/form-data`: `fecha_factura`, `rubro_id`, `proyecto_id`, `concepto`, `cc_nit?`, `empresa?`, `valor`, `observaciones?`, `soporte?` (**imagen**), `archivo?` (**PDF**). En etapa `SOLICITUD` → `409 ETAPA_INVALIDA` |
+| POST | `/viaticos/{id}/gastos` | dueño (`etapa = LEGALIZACION`, `estado = PENDIENTE`) | `multipart/form-data`: `fecha_factura`, `rubro_id`, `proyecto_id` **o** `proyecto_otro`, `concepto`, `cc_nit?`, `empresa?`, `valor`, `observaciones?`, `soporte?` (**imagen**), `archivo?` (**PDF**). En etapa `SOLICITUD` → `409 ETAPA_INVALIDA` |
 | PATCH | `/gastos/{gasto_id}` | dueño (misma condición) | Sin archivos |
 | DELETE | `/gastos/{gasto_id}` | dueño (misma condición) | Lógico |
 | PUT | `/gastos/{gasto_id}/{tipo}` | dueño (misma condición) | `tipo` ∈ `soporte`, `archivo` |
@@ -150,6 +150,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | GET | `/gastos/{gasto_id}/{tipo}` | dueño, F A S | `{url, expires_at, mime_type, nombre}`: URL **prefirmada de S3** de 5 min |
 
 - `rubro_id`/`proyecto_id` inexistente o inactivo → `422 VALOR_NO_PERMITIDO`.
+- **Proyecto híbrido (RN-16, ADR-031)**, en gastos y en la solicitud: se envía **exactamente uno** de `proyecto_id` (catálogo) o `proyecto_otro` (texto de 3 a 150 caracteres, se guarda recortado). Ninguno → `422 PROYECTO_REQUERIDO`; los dos → `422 PROYECTO_AMBIGUO`. Los `PATCH` siguen la misma regla: enviar uno borra el otro.
 - PDF en `soporte` o imagen en `archivo` → `415 TIPO_ARCHIVO_NO_PERMITIDO` (RN-13).
 - Las operaciones sobre un gasto usan `/gastos/{id}`; el acceso se valida a través de su viático.
 
@@ -168,7 +169,7 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 
 | Método | Ruta | Roles | Respuesta |
 | :--- | :--- | :--- | :--- |
-| GET | `/indicadores/consumo-por-proyecto?desde&hasta` | F A S | `[{proyecto_id, proyecto, total_gastos, cantidad_gastos}]` |
+| GET | `/indicadores/consumo-por-proyecto?desde&hasta` | F A S | `[{proyecto_id, proyecto, en_catalogo, total_gastos, cantidad_gastos}]`. Los gastos con "Otro" se agrupan por nombre normalizado, con `proyecto_id = null` y `en_catalogo = false` |
 | GET | `/indicadores/estados?desde&hasta&proyecto_id` | F A S | `[{estado, cantidad}]` (estado operativo; S-07) |
 | GET | `/indicadores/kpis?desde&hasta` | F A S | `{total_transferido, total_gastos, saldo_por_reembolsar, saldo_por_reintegrar, pendientes_aprobacion, pendientes_pago}` (opcional MVP) |
 
@@ -193,7 +194,8 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
   "colaborador": { "nombre": "Ana Pérez", "cargo": "Profesional de campo", "celula": "Campo", "es_prestador_servicios": false },
   "motivo_viaje": "Taller de campo",
   "solicitud": {
-    "proyecto": { "id": "…", "nombre": "Conexión Agro" },
+    "proyecto": { "id": "…", "nombre": "Conexión Agro", "en_catalogo": true },
+    "proyecto_otro": null,
     "lider_proyecto": "María Gómez",
     "requiere_tiquete": true,
     "requiere_gastos_viaje": true,
@@ -250,7 +252,7 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 | 409 | `TRANSICION_INVALIDA`, `SOLICITUD_INCOMPLETA`, `LEGALIZACION_INCOMPLETA`, `LEGALIZACION_NO_HABILITABLE`, `ETAPA_INVALIDA`, `REQUIERE_APROBACION`, `EN_USO`, `DUPLICADO`, `NO_EDITABLE`, `ULTIMO_SUPERADMIN`, `SUPERADMIN_SIN_PASSWORD` | Reglas de negocio o de estado |
 | 413 | `ARCHIVO_MUY_GRANDE` | Más de 10 MB |
 | 415 | `TIPO_ARCHIVO_NO_PERMITIDO` | Tipo no admitido o en el campo equivocado |
-| 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |
+| 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `PROYECTO_REQUERIDO`, `PROYECTO_AMBIGUO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |
 | 429 | `DEMASIADAS_SOLICITUDES`, `CUENTA_BLOQUEADA_TEMPORALMENTE` | Límite en `/auth/*`; bloqueo por intentos |
 | 500 | `ERROR_INTERNO` | Sin detalles internos |
 

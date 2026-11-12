@@ -122,6 +122,7 @@ Tres tablas con la **misma estructura**, administradas solo por SUPERADMIN (RN-2
 | **`exige_formato_prestador`** | `BOOLEAN` | `NOT NULL DEFAULT false`. Si es `true` y el viajero es prestador, la solicitud no calcula por tabla y exige formato adjunto (RN-33). Sustituye la lista fija del código de `javaScript.html` |
 
 - Sin `deleted_at`: se desactivan.
+- **Proyecto híbrido (ADR-031):** `gastos` y `viaticos` referencian un proyecto del catálogo **o** guardan un nombre escrito en `proyecto_otro` (opción "Otro" del formulario; exactamente uno de los dos). "Otro" **no** es una fila de `proyectos`. Rubros y células siguen siendo listas cerradas.
 - Valores iniciales: de la exportación de AppSheet (P-2) y de la hoja `PROYECTOS` del Apps Script.
 - Renombrar se audita (`CATALOGO_EDITAR`). El rol no es un catálogo.
 
@@ -191,7 +192,8 @@ Reemplaza a `legalizaciones`. Un registro recorre la etapa `SOLICITUD` y la `LEG
 
 | Columna | Tipo | Restricciones |
 | :--- | :--- | :--- |
-| `proyecto_id` | `UUID NULL` FK → `proyectos.id` | `RESTRICT`. Obligatorio en `CON_SOLICITUD` |
+| `proyecto_id` | `UUID NULL` FK → `proyectos.id` | `RESTRICT`. Proyecto del catálogo (RN-16) |
+| `proyecto_otro` | `VARCHAR(150) NULL` | Nombre escrito con la opción **"Otro"** (RN-16, ADR-031). `CHECK (proyecto_otro IS NULL OR char_length(btrim(proyecto_otro)) >= 3)`. En `CON_SOLICITUD` hay **exactamente uno** de `proyecto_id` / `proyecto_otro` (ver restricciones) |
 | `lider_proyecto` | `TEXT NULL` | Gerente/líder del proyecto. Obligatorio en `CON_SOLICITUD` |
 | `empresa` | `TEXT NULL` | Opcional |
 | `requiere_tiquete` | `BOOLEAN NOT NULL DEFAULT false` | Si `true`, exige `colaborador_fecha_nacimiento` (RN-31) |
@@ -220,7 +222,8 @@ Reemplaza a `legalizaciones`. Un registro recorre la etapa `SOLICITUD` y la `LEG
 **Restricciones de coherencia**
 
 - `ck_viaticos__liquidacion_requiere_aprobado`: `estado_financiero NOT IN ('PAGADO','PROCESADO') OR (estado = 'APROBADO' AND etapa = 'LEGALIZACION')` (RN-03).
-- `ck_viaticos__solicitud_solo_con_solicitud`: si `modalidad = 'LEGALIZACION_DIRECTA'`, entonces `proyecto_id`, `lider_proyecto`, `presupuesto_solicitado`, `firma_archivo_id`, `formato_adjunto_id`, `solicitud_aprobada_at` y `legalizacion_habilitada_at` son `NULL` y `requiere_tiquete = requiere_gastos_viaje = false`.
+- `ck_viaticos__proyecto_exclusivo` (RN-16, ADR-031): `(modalidad = 'CON_SOLICITUD' AND ((proyecto_id IS NOT NULL AND proyecto_otro IS NULL) OR (proyecto_id IS NULL AND proyecto_otro IS NOT NULL))) OR (modalidad = 'LEGALIZACION_DIRECTA' AND proyecto_id IS NULL AND proyecto_otro IS NULL)`. Es la regla "exactamente uno" aplicada solo a la solicitud, porque la legalización directa no tiene proyecto de cabecera (el proyecto va en cada gasto).
+- `ck_viaticos__solicitud_solo_con_solicitud`: si `modalidad = 'LEGALIZACION_DIRECTA'`, entonces `proyecto_id`, `proyecto_otro`, `lider_proyecto`, `presupuesto_solicitado`, `firma_archivo_id`, `formato_adjunto_id`, `solicitud_aprobada_at` y `legalizacion_habilitada_at` son `NULL` y `requiere_tiquete = requiere_gastos_viaje = false`.
 - `ck_viaticos__legalizacion_habilitada`: `etapa = 'LEGALIZACION' AND modalidad = 'CON_SOLICITUD'` implica `legalizacion_habilitada_at IS NOT NULL`.
 - La obligatoriedad completa de la solicitud (trayectos, firma, formato, fecha de nacimiento) es **de servicio** (RN-06), porque la solicitud se guarda como borrador `PENDIENTE` antes de estar completa.
 
@@ -256,7 +259,8 @@ De **1 a 5** tramos por solicitud (RN-30). Solo existen en viáticos `CON_SOLICI
 | **`viatico_id`** | `UUID` FK → `viaticos.id` | `NOT NULL ON DELETE RESTRICT`. Reemplaza `legalizacion_id`. Solo se crean gastos con `etapa = 'LEGALIZACION'` (lo valida el service) |
 | `fecha_factura` | `DATE` | `NOT NULL`; no futura (RN-07). Fecha de análisis de los indicadores |
 | `rubro_id` | `UUID` FK → `rubros.id` | `NOT NULL RESTRICT` |
-| `proyecto_id` | `UUID` FK → `proyectos.id` | `NOT NULL RESTRICT` |
+| `proyecto_id` | `UUID NULL` FK → `proyectos.id` | `RESTRICT`. Proyecto del catálogo (RN-16) |
+| `proyecto_otro` | `VARCHAR(150) NULL` | Nombre escrito con la opción "Otro" (ADR-031); mínimo 3 caracteres sin espacios de borde. **`CHECK ck_gastos__proyecto_exclusivo`: `(proyecto_id IS NOT NULL AND proyecto_otro IS NULL) OR (proyecto_id IS NULL AND proyecto_otro IS NOT NULL)`** |
 | `concepto` | `TEXT` | `NOT NULL` |
 | `cc_nit`, `empresa` | `TEXT NULL` | Proveedor |
 | `valor` | `NUMERIC(14,2)` | `NOT NULL CHECK (valor > 0)` |
@@ -356,7 +360,7 @@ v_viatico_saldos(
 
 `saldo > 0` ⇒ reintegro a la empresa; `saldo < 0` ⇒ reembolso al viajero (RN-02). En `etapa = 'SOLICITUD'` el saldo no es significativo (sin gastos) y la UI no lo muestra.
 
-Los **indicadores** no usan esta vista como base temporal: agrupan `gastos` por `proyecto_id` filtrando `fecha_factura BETWEEN desde AND hasta`.
+Los **indicadores** no usan esta vista como base temporal: agrupan `gastos` por proyecto filtrando `fecha_factura BETWEEN desde AND hasta`. La clave de agrupación es `proyecto_id` o, si es nulo, `lower(btrim(proyecto_otro))` (ADR-031): cada proyecto escrito a mano aparece como una barra propia, marcada "fuera de catálogo".
 
 ## 3. Relaciones y cardinalidades
 
@@ -366,12 +370,12 @@ Los **indicadores** no usan esta vista como base temporal: agrupan `gastos` por 
 | `celulas` → `usuarios` | 1 : N | `RESTRICT` |
 | `archivos` → `usuarios` (firma) | 1 : 0..1 | `RESTRICT` |
 | `usuarios` → `viaticos` | 1 : N | `RESTRICT` |
-| `proyectos` → `viaticos` (cabecera de solicitud) | 1 : N | `RESTRICT` |
+| `proyectos` → `viaticos` (cabecera de solicitud) | 1 : N (o `proyecto_otro`) | `RESTRICT` |
 | `viaticos` → `viatico_trayectos` | 1 : 1..5 (solo `CON_SOLICITUD`) | `CASCADE` |
 | `tarifas_viaticos` → `viatico_trayectos` | 1 : N | `RESTRICT` |
 | `archivos` → `viaticos` (firma, formato) | 1 : 0..1 cada uno | `RESTRICT` |
 | `viaticos` → `gastos` | 1 : 0..N (solo en etapa `LEGALIZACION`) | `RESTRICT`; borrado lógico en cascada desde el service |
-| `proyectos` / `rubros` → `gastos` | 1 : N | `RESTRICT` |
+| `proyectos` / `rubros` → `gastos` | 1 : N (el proyecto es opcional si hay `proyecto_otro`) | `RESTRICT` |
 | `archivos` → `gastos` (soporte, archivo) | 1 : 0..1 | `RESTRICT` |
 | `viaticos` → `viatico_eventos` | 1 : N (≥1) | Nunca se borran |
 | `usuarios` → `sesiones` | 1 : N | `CASCADE` |
@@ -431,6 +435,7 @@ Los **indicadores** no usan esta vista como base temporal: agrupan `gastos` por 
 | `viatico_trayectos` | `UNIQUE (viatico_id, orden)`, `(tarifa_id)` | |
 | `gastos` | `(viatico_id) WHERE deleted_at IS NULL` | Suma del saldo |
 | `gastos` | `(fecha_factura, proyecto_id) WHERE deleted_at IS NULL` | Indicadores |
+| `gastos`, `viaticos` | `(lower(proyecto_otro)) WHERE proyecto_otro IS NOT NULL` | Agrupar y buscar los proyectos escritos con "Otro" (y detectar cuáles conviene crear en el catálogo) |
 | `gastos` | `(rubro_id)`, `(proyecto_id)` | FK |
 | `archivos` | `(sha256)` | Duplicados |
 | `viatico_eventos` | `(viatico_id, created_at)` | Historial |

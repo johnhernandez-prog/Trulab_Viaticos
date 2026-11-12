@@ -15,6 +15,8 @@
 
 ## Última actividad
 
+**2026-11-12 · Ajuste: proyecto con esquema híbrido (ADR-031).** Por decisión del dueño del producto, RN-16 y DP-14 cambian para el **proyecto**: se mantiene el catálogo `proyectos` (SUPERADMIN) y los formularios de solicitud y de gasto ofrecen siempre la opción **"Otro"**, que exige escribir el nombre (`proyecto_otro`, `VARCHAR(150)`, 3–150 caracteres, recortado). En `gastos`, `proyecto_id` pasa a nullable con `ck_gastos__proyecto_exclusivo` (exactamente uno). En `viaticos` el "exactamente uno" aplica solo a `CON_SOLICITUD` (`ck_viaticos__proyecto_exclusivo`); en `LEGALIZACION_DIRECTA` ambos son nulos porque el proyecto va en cada gasto. "Otro" no es una fila del catálogo. Errores `422 PROYECTO_REQUERIDO` / `PROYECTO_AMBIGUO`. Indicadores: los nombres escritos se agrupan por texto normalizado con `en_catalogo = false`. Un proyecto escrito no tiene `exige_formato_prestador`, así que se calcula por tarifa (RN-33). Supuesto nuevo S-15. Rubros y células siguen cerrados. Afecta a S2-01/S2-02 (migraciones de `proyectos`, `viaticos` y `gastos`), S2-05/S2-08 (validación) y S3-04 (indicadores); no a S1-08. Documentos: `SPEC.md`, `docs/database-design.md`, `docs/api-design.md`, `docs/user-flows.md`, `docs/architecture.md` (ADR-031) y `CLAUDE.md`.
+
 **2026-11-12 · S1-07b · Migración correctiva de identidad (ADR-027).** Migración `20261112_2256_usuarios_acceso_hibrido` (`f7a1a890a1d3`, después de `a154d56e054d`). Sin endpoints ni hashing todavía (S1-08).
 
 | Cambio | Detalle |

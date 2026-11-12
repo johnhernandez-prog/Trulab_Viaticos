@@ -134,7 +134,7 @@ La autorización se aplica **en el backend**. El frontend solo oculta lo que no 
 | CU-02b | **Crear o promover a otro SUPERADMIN** (cuenta `@trulab.co`) | SUPERADMIN |
 | CU-03 | Gestionar catálogo de cargos | ADMIN, SUPERADMIN |
 | CU-04 | Crear un viático: **`CON_SOLICITUD`** (pedir viáticos y tiquetes antes del viaje) o **`LEGALIZACION_DIRECTA`** (cargar gastos ya realizados / recursos propios) | Todos |
-| CU-04b | Diligenciar la solicitud: proyecto, líder, trayectos (1–5), tiquetes, firma, comentarios; ver el presupuesto calculado | Dueño |
+| CU-04b | Diligenciar la solicitud: proyecto (catálogo u "Otro"), líder, trayectos (1–5), tiquetes, firma, comentarios; ver el presupuesto calculado | Dueño |
 | CU-05 | Registrar gasto: rubro, proyecto, concepto, CC/NIT, empresa, valor, fecha de factura, soporte y/o archivo | Dueño |
 | CU-06 | **Aprobar** la solicitud o la legalización | ADMIN, SUPERADMIN |
 | CU-07 | Revisar comprobantes y cumplimiento de políticas | ADMIN (FINANCIERO en consulta) |
@@ -168,7 +168,7 @@ La autorización se aplica **en el backend**. El frontend solo oculta lo que no 
 | RN-13 | **Tipos de adjunto** (DP-15 ✅). Gasto: `soporte` = imagen (JPG, PNG, WEBP, HEIC) y `archivo` = PDF. Solicitud: `firma` = imagen (PNG, JPG, WEBP) y `formato adjunto` = PDF o XLSX (RN-33). Máximo 10 MB por archivo. El tipo se valida por contenido (*magic bytes*), no por extensión; se rechazan SVG y HTML. |
 | RN-14 | **Recursos propios** (regla real de AppSheet): `valor_transferido = 0` si `recursos_propios = true`; si no, `= valor_asignado`. Calculado, nunca escrito a mano. **Se mantiene igual en la migración.** `recursos_propios = true` solo es válido en `LEGALIZACION_DIRECTA` (RN-28). |
 | RN-15 | **Contraseñas** (reemplaza "sin contraseñas"; ADR-027). Solo existen para `VIAJERO`, `ADMIN` y `FINANCIERO`. Se guardan con **Argon2id**; mínimo 12 caracteres; nunca en claro ni en logs. Toda contraseña asignada por el sistema es **temporal** y exige cambio en el primer acceso (`debe_cambiar_password`). **Recuperación:** el usuario pide el restablecimiento con su usuario o correo; el sistema responde siempre lo mismo (no revela si existe) y envía por correo un enlace con un token de **un solo uso**, de **15–30 min**, guardado solo como hash SHA-256. Restablecer o cambiar la contraseña revoca todas las sesiones. Intentos de login limitados (RNF-02). **SUPERADMIN no tiene contraseña.** Se audita `LOGIN_EXITOSO`, `LOGIN_FALLIDO`, `PASSWORD_CAMBIADA`, `PASSWORD_RECUPERACION_SOLICITADA`, `ACCESO_DENEGADO`, `SUPERADMIN_ASIGNADO`. |
-| RN-16 | **Proyecto y rubro** (DP-02, DP-14): cada gasto se clasifica con `proyecto` y `rubro` de **listas cerradas** (catálogos). Además, la **cabecera de la solicitud** tiene un `proyecto_id` (el proyecto al que se carga el viaje); una legalización puede tener gastos de varios proyectos. |
+| RN-16 | **Proyecto y rubro** (DP-02, DP-14, **esquema híbrido de proyecto, ADR-031**). El **rubro** sale siempre de la lista cerrada (catálogo `rubros`). El **proyecto** se elige de la lista de proyectos **activos** del catálogo `proyectos` (administrado por SUPERADMIN) **o** de la opción fija **"Otro"**, que siempre está disponible: al elegirla, el formulario exige escribir el nombre del proyecto en `proyecto_otro` (texto obligatorio, 3–150 caracteres) para cuando aún no exista en el catálogo. Se guarda **exactamente uno** de los dos (`proyecto_id` o `proyecto_otro`; `CHECK` en la BD). Aplica al **gasto** y a la **cabecera de la solicitud** (`CON_SOLICITUD`); una legalización puede tener gastos de varios proyectos. "Otro" no es una fila del catálogo sino una opción de la interfaz. Los proyectos escritos a mano se pueden revisar después para crearlos en el catálogo; el sistema no los convierte solo. |
 | RN-17 | **Datos del colaborador automáticos:** nombre, cargo, cédula, célula y tipo de vinculación del viático se toman del usuario autenticado y se guardan como instantánea. El viajero nunca los escribe. |
 | RN-18 | **Filtro temporal de indicadores:** siempre sobre **`gastos.fecha_factura`** con `BETWEEN desde AND hasta`. No se usan fechas de viaje ni `fecha_legalizacion` para el análisis financiero. |
 | RN-19 | Solo **FINANCIERO** (y SUPERADMIN) registra o modifica el `valor_asignado` (DP-04). El `presupuesto_solicitado` calculado en la solicitud es solo un **monto sugerido de referencia** para el desembolso; no es el valor transferido. |
@@ -185,7 +185,7 @@ La autorización se aplica **en el backend**. El frontend solo oculta lo que no 
 | RN-30 | **Trayectos:** de **1 a 5** por solicitud, con `orden`; `ciudad_destino` distinta de `ciudad_origen` salvo que sea `"Otro"`; `fecha_regreso >= fecha_ida`; `dias_estadia` entero `>= 1`, sugerido como `ceil(fecha_regreso − fecha_ida) + 1` y editable por el usuario; `requiere_hospedaje` booleano. Ciudades de la lista cerrada de `tarifas_viaticos`. |
 | RN-31 | **Fecha de nacimiento:** si `requiere_tiquete = true`, el viajero debe tener `fecha_nacimiento` (para la emisión de tiquetes); se toma de su perfil o la completa al solicitar, y se guarda como instantánea. Dato personal (RNF-09). |
 | RN-32 | **Firma:** la solicitud lleva la firma del solicitante (imagen) y se incrusta en el PDF oficial de solicitud. Se puede reutilizar la firma guardada en el perfil. Sin firma no se puede aprobar la solicitud ni generar su PDF. |
-| RN-33 | **Formato adjunto de prestador:** si el viajero es **prestador de servicios** y el `proyecto_id` de la solicitud tiene `exige_formato_prestador = true` (p. ej. `P-CONEXI-002`; configurable en el catálogo, no en el código), **no se calcula presupuesto por tabla**: debe adjuntar un formato diligenciado (PDF o XLSX, `formato_adjunto_id`) y FINANCIERO fija el valor asignado a partir de él. Sin formato no se puede aprobar. |
+| RN-33 | **Formato adjunto de prestador:** si el viajero es **prestador de servicios** y el `proyecto_id` de la solicitud tiene `exige_formato_prestador = true` (p. ej. `P-CONEXI-002`; configurable en el catálogo, no en el código; un proyecto escrito en "Otro" no tiene esa marca, así que se calcula por tarifa), **no se calcula presupuesto por tabla**: debe adjuntar un formato diligenciado (PDF o XLSX, `formato_adjunto_id`) y FINANCIERO fija el valor asignado a partir de él. Sin formato no se puede aprobar. |
 
 ## 9. Requisitos funcionales
 
@@ -196,11 +196,11 @@ La autorización se aplica **en el backend**. El frontend solo oculta lo que no 
 | RF-003 | CRUD de usuarios con rol, cargo, cédula, célula, tipo de vinculación (prestador), fecha de nacimiento, firma y estado activo/inactivo; SUPERADMIN crea o promueve a otros SUPERADMIN | M2 | ✅ |
 | RF-004 | CRUD de cargos con folio automático | M3 | ✅ |
 | RF-005 | CRUD de viáticos (`VT-`) con filtros (etapa, modalidad, estado, estado financiero, fechas, viajero) y datos del colaborador autocompletados (RN-17) | M4 | ✅ |
-| RF-006 | CRUD de gastos con rubro y proyecto, concepto, CC/NIT, empresa, fecha de factura, observaciones, soporte (con captura desde cámara) y archivo | M5 | ✅ |
+| RF-006 | CRUD de gastos con rubro y proyecto (catálogo u "Otro" con nombre escrito), concepto, CC/NIT, empresa, fecha de factura, observaciones, soporte (con captura desde cámara) y archivo | M5 | ✅ |
 | RF-007 | Acciones de estado con historial: operativas (aprobar, rechazar, devolver; ADMIN), financieras (FINANCIERO) y *habilitar legalización* (dueño) | M4/M6 | ✅ |
 | RF-008 | Vista de pagos: valor transferido, total gastado y saldo, con resaltado de negativos, filtros y orden | M6 | ✅ |
 | RF-009 | Generación y descarga del **PDF de legalización** con sus gastos | M7 | ✅ |
-| RF-010 | Dashboard: consumo por proyecto del gasto (barras) y conteo por estado (dona), con filtro por rango de fecha de factura | M8 | ✅ |
+| RF-010 | Dashboard: consumo por proyecto del gasto (barras; los proyectos escritos en "Otro" se agrupan por su nombre normalizado y se marcan como fuera de catálogo) y conteo por estado (dona), con filtro por rango de fecha de factura | M8 | ✅ |
 | RF-011 | Visualización segura de soportes, archivos, firmas y formatos (URL temporal) | M5 | ✅ |
 | RF-012 | Migración de datos históricos desde AppSheet | — | ✅ |
 | RF-013 | Notificación por correo (Amazon SES) al aprobar, devolver, rechazar y pagar | M9 | DP-06 |
@@ -303,13 +303,13 @@ Solo se cambian con una decisión explícita del dueño del producto, registrada
 | ID | Decisión | Resolución definitiva | ADR |
 | :--- | :--- | :--- | :--- |
 | **DP-01** ✅ *(actualizada 2026-11-12)* | Autenticación | **Híbrida.** Dominio corporativo `@trulab.co`. **VIAJERO, ADMIN y FINANCIERO:** usuario y contraseña (Argon2id), recuperación por correo y cambio obligatorio de la temporal; **no** usan Google OAuth. **SUPERADMIN:** exclusivamente Google OAuth `@trulab.co`; sin contraseña. SUPERADMIN inicial: `john.hernandez@trulab.co`; cualquier SUPERADMIN activo crea o promueve a otros; nunca se desactiva ni degrada al último. *Motivo:* los prestadores de servicios externos no tienen correo corporativo (no subordinación laboral). **Reemplaza** la versión del 2026-11-10 ("solo Google, sin contraseñas"). RN-12 y RN-15 reescritas; RF-002 reactivado | ADR-027 (reemplaza ADR-006) |
-| **DP-02** ✅ | Proyectos y Segmentador | `Segmentador` es solo un filtro temporal (`desde`/`hasta`). Los proyectos son una lista cerrada en cada gasto (y, ahora, también en la cabecera de la solicitud, RN-16) | ADR-017, ADR-018 |
+| **DP-02** ✅ | Proyectos y Segmentador | `Segmentador` es solo un filtro temporal (`desde`/`hasta`). Los proyectos se eligen en cada gasto (y en la cabecera de la solicitud) del catálogo **o** con la opción "Otro" y texto propio (RN-16, ADR-031) | ADR-017, ADR-018, ADR-031 |
 | **DP-03** ✅ | Estado para devolver | Absorbida por DP-13: *devolver* regresa a `PENDIENTE` con comentario | ADR-021 |
 | **DP-04** ✅ | Valor transferido | Solo FINANCIERO (y SUPERADMIN) registra el valor asignado. `valor_transferido = IF(recursos_propios, 0, valor_asignado)` | ADR-019 |
 | **DP-05** ✅ *(resuelta 2026-11-12)* | Hosting y archivos | **AWS.** Staging y producción en Amazon Web Services: RDS for PostgreSQL 16, S3 (archivos, URLs prefirmadas de 5 min), SES (correos) y ECS Fargate o App Runner. **Se descarta GCP** (Cloud Run, Cloud SQL, GCS). Desarrollo local sin cambios (`STORAGE_BACKEND=local`) | ADR-028 |
 | **DP-07** ✅ | Estructura real de AppSheet | Validadas las 5 tablas (§18) | ADR-020 |
 | **DP-13** ✅ | Estados | `estado` (ADMIN) y `estado_financiero` (FINANCIERO), más el espejo. Ahora rigen sobre ambas etapas del viático | ADR-021 |
-| **DP-14** ✅ | Catálogos | Proyectos, rubros y células en tablas maestras de SUPERADMIN. Se extiende a `tarifas_viaticos` (DP-20) | ADR-022 |
+| **DP-14** ✅ *(ajustada 2026-11-12)* | Catálogos | Proyectos, rubros y células en tablas maestras de SUPERADMIN. Se extiende a `tarifas_viaticos` (DP-20). **Proyecto con esquema híbrido:** catálogo + opción "Otro" con nombre escrito (`proyecto_otro`), exactamente uno de los dos (RN-16). Rubros y células siguen siendo listas cerradas | ADR-022, ADR-031 |
 | **DP-15** ✅ | Adjuntos | `soporte` (imagen) o `archivo` (PDF), al menos uno por gasto | ADR-023 |
 | **DP-16** ✅ *(ajustada)* | Fecha de análisis | Indicadores sobre `gastos.fecha_factura`. Las fechas de viaje (`viatico_trayectos`) existen para la solicitud pero **no** son base de indicadores | ADR-024 |
 | **DP-17** ✅ | Recursos propios | Lo marca el VIAJERO al crear un viático `LEGALIZACION_DIRECTA` | ADR-019 |
@@ -351,6 +351,7 @@ Se aplican y se ajustan sin ADR nuevo mientras no contradigan §17.1. Se validan
 | S-12 | Al habilitar la legalización, `estado_financiero` conserva su valor (`TRANSFERIDO`) y `valor_asignado` no cambia; la liquidación posterior compara el anticipo con los gastos | DP-19 |
 | S-13 | Cada operativo (VIAJERO/ADMIN/FINANCIERO) recibe un `username` único (recomendado: parte local del correo corporativo o el definido por ADMIN); la contraseña temporal la genera el servidor y se envía solo por correo (ADMIN no la ve). Si no hay correo válido, ADMIN usa "restablecer contraseña" tras corregirlo | DP-01 |
 | S-14 | Bloqueo de login: 5 fallos consecutivos por usuario → bloqueo de 15 min (además del límite por IP) | DP-01 |
+| S-15 | `proyecto_otro` se guarda recortado (sin espacios al inicio ni al final); el filtro `proyecto_id` de listas y pagos no incluye los "Otro"; existe el filtro `proyecto_otro` (búsqueda por texto) para FINANCIERO, ADMIN y SUPERADMIN | ADR-031 |
 
 ## 18. Estructura real de AppSheet (validada, DP-07 ✅) y del proyecto Apps Script
 

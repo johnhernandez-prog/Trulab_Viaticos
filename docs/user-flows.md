@@ -144,7 +144,7 @@ El viático tiene **tres dimensiones independientes** y un espejo:
 
 **F-03a · Cargos.** **Actor:** ADMIN o SUPERADMIN (FINANCIERO solo consulta). Lista con folio `CA-`, crear, editar y eliminar (409 si tiene usuarios).
 
-**F-03b · Catálogos (proyectos, rubros, células).** **Actor:** solo SUPERADMIN. Pestañas con nombre, estado y cantidad de usos; crear, renombrar (se audita), desactivar/activar (sin eliminar). En **Proyectos**, además: *código* y la casilla **"Exige formato de prestador"** (RN-33).
+**F-03b · Catálogos (proyectos, rubros, células).** **Actor:** solo SUPERADMIN. Pestañas con nombre, estado y cantidad de usos; crear, renombrar (se audita), desactivar/activar (sin eliminar). En **Proyectos**, un apartado *Escritos con "Otro"* lista los nombres escritos a mano y cuántos registros los usan, para decidir cuáles crear en el catálogo. En **Proyectos**, además: *código* y la casilla **"Exige formato de prestador"** (RN-33).
 
 **F-03c · Tarifas de viáticos.** **Actor:** solo SUPERADMIN (FINANCIERO y ADMIN consultan) (RF-018).
 
@@ -167,7 +167,7 @@ El viático tiene **tres dimensiones independientes** y un espejo:
 
 ### F-04a · Solicitud de viáticos y tiquetes (`CON_SOLICITUD`)
 
-1. **Datos generales:** proyecto (lista), líder de proyecto, empresa (opcional), motivo del viaje.
+1. **Datos generales:** proyecto (lista de proyectos activos más la opción **"Otro"**, que abre el campo obligatorio *Nombre del proyecto*; ADR-031), líder de proyecto, empresa (opcional), motivo del viaje.
 2. **Opciones:** ☐ *Requiere tiquete* · ☐ *Requiere gastos de viaje*. Si marca tiquete y no tiene fecha de nacimiento en su perfil, el formulario la pide y la guarda (RN-31). Sin gastos de viaje, se omite el presupuesto (S-09).
 3. **Trayectos (1 a 5):** "+ Agregar trayecto" → ciudad de origen, ciudad de destino (no puede ser igual al origen salvo "Otro"), fecha y hora de ida y de regreso, ¿requiere hospedaje? y **días de estadía**, que se sugieren como `ceil(regreso − ida) + 1` y se pueden editar (RN-30).
 4. **Presupuesto calculado:** al completar un trayecto, la pantalla llama a `calcular-presupuesto` y muestra el desglose (alimentación, transporte interno, otros gastos × días + transporte aeropuerto + intermunicipal) y el **total**. Los importes **no son editables**; si necesita más dinero, lo justifica en **Comentarios** con la autorización del líder de proyecto (RN-29).
@@ -193,7 +193,7 @@ El viático tiene **tres dimensiones independientes** y un espejo:
 
 1. En el detalle → **"+ Agregar gasto"** (Sheet inferior en móvil).
 2. **Comprobante primero.** Debe haber **al menos uno** (DP-15): **Soporte (imagen)** — "Tomar foto" o "Elegir imagen", comprimida en el cliente — o **Archivo (PDF)**.
-3. Datos: fecha de factura (no futura), **rubro**, **proyecto**, concepto, CC/NIT y empresa del proveedor, valor, observaciones.
+3. Datos: fecha de factura (no futura), **rubro**, **proyecto** (lista o "Otro" + nombre escrito), concepto, CC/NIT y empresa del proveedor, valor, observaciones.
 4. Guardar: progreso de subida y toast "Gasto guardado".
 5. El detalle recalcula el total gastado y el saldo. "Guardar y agregar otro" repite el flujo.
 
