@@ -17,7 +17,7 @@ def sin_entorno(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _settings(**valores: object) -> Settings:
     # `model_validate` no lee el entorno: solo cuentan los valores de la prueba y los defaults.
-    return Settings.model_validate({"database_url": URL, **valores})
+    return Settings.model_validate({"database_url": URL, "jwt_secret": "x" * 32, **valores})
 
 
 def test_valores_por_defecto_seguros_para_local() -> None:
@@ -68,3 +68,15 @@ def test_configuracion_de_produccion_valida() -> None:
 def test_superadmin_inicial_por_defecto_vacio_en_el_codigo() -> None:
     # El valor (john.hernandez@trulab.co) vive en `.env`/`.env.example`, no en el código.
     assert _settings().superadmin_email == ""
+
+
+@pytest.mark.parametrize("secreto", ["", "corto"])
+def test_jwt_secret_obligatorio_y_largo(secreto: str) -> None:
+    with pytest.raises(ValidationError, match="jwt_secret"):
+        _settings(jwt_secret=secreto)
+
+
+def test_los_secretos_no_aparecen_en_repr() -> None:
+    texto = repr(_settings(jwt_secret="s" * 40))
+
+    assert "s" * 40 not in texto and URL not in texto

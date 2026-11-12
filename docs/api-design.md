@@ -1,6 +1,6 @@
 # Diseño de API — Trulab Viajes
 
-> Diseño del contrato. Implementado hasta ahora: solo `GET /api/v1/health`. La especificación OpenAPI que genere FastAPI será la referencia viva; este documento define las reglas que debe cumplir.
+> Diseño del contrato. Implementado: `GET /api/v1/health` y la **autenticación de §3** (S1-08). La especificación OpenAPI que genere FastAPI será la referencia viva; este documento define las reglas que debe cumplir.
 > Alineado con `SPEC.md` v0.4: DP-01 actualizada (acceso híbrido, ADR-027), DP-19 (entidad `viaticos`, ADR-029) y DP-20 (tarifas, ADR-030).
 
 ---
@@ -33,13 +33,17 @@ Acceso **híbrido**: usuario y contraseña para `VIAJERO`, `ADMIN` y `FINANCIERO
 | POST | `/auth/password/change` | `{password_actual, nueva_password}`. Cambio voluntario o **obligatorio** del primer acceso; revoca las demás sesiones y emite nueva | Bearer (operativos) |
 | POST | `/auth/refresh` | Cookie de refresh → nuevo access; rota la cookie | Cookie |
 | POST | `/auth/logout` | Revoca la sesión actual y borra la cookie | Bearer |
-| GET | `/me` | Usuario actual: rol, cargo, célula, `es_prestador_servicios`, `debe_cambiar_password`, `permisos` | Bearer |
+| GET | `/me` | Usuario actual: rol, cargo, célula, `es_prestador_servicios`, `debe_cambiar_password` (la lista de `permisos` llega con la matriz RBAC, S1-09) | Bearer |
+| POST | `/auth/dev/login` | `{correo}` → sesión de un **SUPERADMIN** sin pasar por Google. **Solo existe con `ENV=local`** (en otro entorno la ruta no se registra: 404); mientras no haya OAuth Client ID (R1.1) | Pública, solo local |
 
 - Encabezado: `Authorization: Bearer <access_token>`. `/auth/refresh` y `/auth/logout` exigen `X-Requested-With: trulab-spa` (junto con `SameSite=Strict`).
 - **Cambio obligatorio de contraseña:** si `debe_cambiar_password = true`, el access token lleva el claim `pwd_change` y **todos** los endpoints, salvo `/auth/password/change`, `/auth/logout` y `/me`, responden `403 CAMBIO_PASSWORD_REQUERIDO`.
 - **Política de contraseña:** mínimo 12 caracteres, no igual al username ni al correo, no estar en una lista de contraseñas comunes; máximo 128. Error `422 PASSWORD_DEBIL` con los motivos.
 - **Sin filtrar existencia:** `login` responde `401 CREDENCIALES_INVALIDAS` tanto si el usuario no existe, como si la contraseña es incorrecta, está inactivo o es SUPERADMIN, con tiempo de respuesta homogéneo (verificación Argon2id ficticia). El motivo real solo queda en `auditoria` (`LOGIN_FALLIDO`).
-- **Bloqueo:** tras 5 fallos consecutivos de un usuario → `429 CUENTA_BLOQUEADA_TEMPORALMENTE` por 15 minutos (S-14); además, límite por IP.
+- **Bloqueo:** tras 5 fallos consecutivos de un usuario (`LOGIN_MAX_FAILED_ATTEMPTS`) se bloquea 15 minutos (`LOGIN_LOCKOUT_MINUTES`, S-14); mientras dure, el login responde `429 CUENTA_BLOQUEADA_TEMPORALMENTE` aun con la contraseña correcta.
+- **Límite por IP** (en memoria del proceso; con varias instancias se pasa a WAF o a un contador compartido): `login` y `google` 10/min, `password/forgot` 5 cada 15 min, `password/reset` 10 cada 15 min → `429 DEMASIADAS_SOLICITUDES`.
+- **Refresh rotativo con detección de reuso:** cada `/auth/refresh` revoca la sesión usada y emite otra (el access token de la anterior deja de valer). Presentar un refresh **ya rotado** revoca **todas** las sesiones del usuario y audita `ACCESO_DENEGADO` (`REFRESH_REUTILIZADO`).
+- **Cambio de contraseña** (`change`) y **restablecimiento** (`reset`) revocan todas las sesiones; `change` emite una sesión nueva en la misma respuesta. El correo de `forgot` se envía en segundo plano para que el tiempo de respuesta no revele si la cuenta existe.
 - **`/auth/google`:** valida firma, `aud`, `exp`, `email_verified`, `hd` = `GOOGLE_WORKSPACE_DOMAIN`, correo registrado, activo y **rol `SUPERADMIN`**. Si el correo existe pero el rol es operativo → `403 METODO_ACCESO_NO_PERMITIDO` ("Use su usuario y contraseña") y `ACCESO_DENEGADO`.
 - Errores: `401` token ausente/inválido/vencido o credenciales inválidas; `403` dominio no permitido, usuario no registrado/inactivo/sin rol, método no permitido para el rol (RN-12).
 - Auditoría: `LOGIN_EXITOSO`, `LOGIN_FALLIDO`, `PASSWORD_CAMBIADA`, `PASSWORD_RECUPERACION_SOLICITADA`, `ACCESO_DENEGADO`. Nunca se registran contraseñas, hashes ni tokens.
@@ -247,14 +251,15 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 | :--- | :--- | :--- |
 | 400 | `SOLICITUD_INVALIDA` | JSON mal formado |
 | 401 | `NO_AUTENTICADO`, `TOKEN_EXPIRADO`, `CREDENCIALES_INVALIDAS` | Sin token, token inválido, o credenciales incorrectas (mensaje genérico) |
-| 403 | `SIN_PERMISO`, `USUARIO_INACTIVO`, `USUARIO_NO_REGISTRADO`, `DOMINIO_NO_PERMITIDO`, `METODO_ACCESO_NO_PERMITIDO`, `CAMBIO_PASSWORD_REQUERIDO` | Incluye la autoaprobación (RN-27) |
+| 403 | `SIN_PERMISO`, `USUARIO_INACTIVO`, `USUARIO_NO_REGISTRADO`, `DOMINIO_NO_PERMITIDO`, `METODO_ACCESO_NO_PERMITIDO`, `CAMBIO_PASSWORD_REQUERIDO` | Incluye la autoaprobación (RN-27) y la falta de `X-Requested-With` en `refresh`/`logout` |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente **o ajeno** |
 | 409 | `TRANSICION_INVALIDA`, `SOLICITUD_INCOMPLETA`, `LEGALIZACION_INCOMPLETA`, `LEGALIZACION_NO_HABILITABLE`, `ETAPA_INVALIDA`, `REQUIERE_APROBACION`, `EN_USO`, `DUPLICADO`, `NO_EDITABLE`, `ULTIMO_SUPERADMIN`, `SUPERADMIN_SIN_PASSWORD` | Reglas de negocio o de estado |
 | 413 | `ARCHIVO_MUY_GRANDE` | Más de 10 MB |
 | 415 | `TIPO_ARCHIVO_NO_PERMITIDO` | Tipo no admitido o en el campo equivocado |
-| 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `PROYECTO_REQUERIDO`, `PROYECTO_AMBIGUO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |
+| 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `PROYECTO_REQUERIDO`, `PROYECTO_AMBIGUO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `PASSWORD_ACTUAL_INCORRECTA`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |
 | 429 | `DEMASIADAS_SOLICITUDES`, `CUENTA_BLOQUEADA_TEMPORALMENTE` | Límite en `/auth/*`; bloqueo por intentos |
 | 500 | `ERROR_INTERNO` | Sin detalles internos |
+| 503 | `LOGIN_GOOGLE_NO_DISPONIBLE` | `/auth/google` sin `GOOGLE_CLIENT_ID` configurado |
 
 `code` es estable, en `MAYUSCULAS`; la UI traduce por `code`. Cada respuesta lleva `X-Request-ID`.
 

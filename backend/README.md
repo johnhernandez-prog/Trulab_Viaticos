@@ -103,3 +103,19 @@ La BD garantiza el acceso híbrido con `CHECK` en `usuarios`:
 Un cambio de rol debe ajustar las credenciales en la misma operación. `tokens_recuperacion_password` guarda solo el SHA-256 del token (`CHECK` de 64 hex) y `trulab_app` no tiene `DELETE`: se invalidan con `used_at`. En pruebas, `tests/fabricas.py::crear_usuario` da a los operativos un `username` y un hash Argon2id ficticio (`HASH_FICTICIO`).
 
 `Settings` (`app/core/config.py`) rechaza al arrancar: `MAIL_BACKEND=log` fuera de `ENV=local`, `MAIL_BACKEND=ses` sin `AWS_SES_SENDER`, `STORAGE_BACKEND=s3` sin `AWS_S3_BUCKET` y `PASSWORD_RESET_TTL_MINUTES` fuera de 15–30.
+
+## Autenticación (S1-08, ADR-027)
+
+| Pieza | Dónde | Qué hace |
+| :--- | :--- | :--- |
+| Primitivas | `app/core/security.py` | Argon2id (`hash_password`, `verificar_password`, `necesita_rehash`, `verificacion_ficticia` para tiempo homogéneo), política de contraseñas (RN-15), tokens opacos + `sha256_hex`, JWT HS256 (`iss`, `aud`, `sub`, `sid`, `rol`, `pwd_change`) |
+| Correo | `app/core/mail.py` | `Mailer`: `LogMailer` (`MAIL_BACKEND=log`, solo `ENV=local`; el cuerpo, con el enlace, va al log) y `SesMailer` (Amazon SES v2 con `boto3`) |
+| Límite por IP | `app/core/rate_limit.py` | `Depends(limitar("auth.login", 10, 60))`; en memoria del proceso |
+| Reglas | `app/modules/auth/service.py` | login, Google (solo SUPERADMIN), refresh rotativo con detección de reuso, logout, forgot/reset/change |
+| Dependencias | `app/modules/auth/dependencias.py` | `UsuarioActual` (exige que no haya cambio de contraseña pendiente) y `UsuarioActualPermitiendoCambio` (solo `/me`, `logout`, `change`). Leen usuario y sesión **de la BD en cada petición** |
+| Google | `app/modules/auth/google.py` | `verificar_id_token` con `google-auth`; `get_verificador_google` se reemplaza en pruebas |
+
+- Las rutas de negocio nuevas protegen con `autenticado: UsuarioActual` (y desde S1-09, además, el permiso).
+- `JWT_SECRET` es obligatorio (≥ 32 caracteres): `scripts/crear_env.py` lo genera. `GOOGLE_CLIENT_ID` vacío = `/auth/google` responde 503; en local queda `POST /auth/dev/login` (solo SUPERADMIN, la ruta no existe fuera de `ENV=local`).
+- **Pruebas:** la fixture `api` (`tests/conftest.py`) da un `TestClient` cuya API usa la sesión de prueba revertida, un buzón en memoria (`Buzon`) y un verificador de Google falso (`tokens_google`). Para auditoría, filtrar los eventos de la prueba con `Auditoria.created_at >= func.now()` (la prueba es una sola transacción), porque la BD local puede tener eventos reales.
+- `src/types/api.ts` del frontend se generó con `ENV=local`, así que incluye `/auth/dev/login`; la CI también corre en local, así que el contrato coincide.

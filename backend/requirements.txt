@@ -1,5 +1,5 @@
 # Dependencias de ejecución del backend (Python 3.12). Versiones exactas.
-# Cada tarea agrega las suyas: google-auth y PyJWT (S1-08), WeasyPrint (F7)...
+# Cada tarea agrega las suyas (WeasyPrint en F7...). Mantener sincronizado el hook de mypy.
 fastapi==0.115.4
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
@@ -7,3 +7,11 @@ pydantic-settings==2.6.1
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 alembic==1.13.3
+# Acceso híbrido (S1-08, ADR-027): Argon2id, JWT de sesión y verificación del ID token de Google.
+argon2-cffi==25.1.0
+PyJWT==2.10.1
+google-auth==2.40.3
+# Transporte HTTP de google-auth (descarga de las claves públicas de Google).
+requests==2.32.4
+# AWS (ADR-028): Amazon SES (correo) desde S1-08; Amazon S3 desde S2-07.
+boto3==1.38.46

@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.core.errors import registrar_manejadores
 from app.core.logs import configurar_logging
 from app.core.middleware import RequestIdMiddleware
+from app.modules.auth import router as auth
 
 API_PREFIX = "/api/v1"
 
@@ -29,7 +30,11 @@ def create_app() -> FastAPI:
     registrar_manejadores(app)
 
     app.include_router(health.router, prefix=API_PREFIX)
-    # Los routers de los módulos de dominio se registran aquí a partir de S1-08.
+    app.include_router(auth.router, prefix=API_PREFIX)
+    app.include_router(auth.router_me, prefix=API_PREFIX)
+    if settings.env == "local":
+        # Login de SUPERADMIN sin OAuth Client ID (R1.1). Fuera de local la ruta no existe (404).
+        app.include_router(auth.router_desarrollo, prefix=API_PREFIX)
     return app
 
 

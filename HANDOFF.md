@@ -8,12 +8,49 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-07 ✅ y S1-07b ✅ terminadas**; **próxima: S1-08** (auth híbrida), luego S1-09 a S1-13 (S1-12 pasa a la semana 5) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-08 ✅ (incluida S1-07b)**; **próxima: S1-09** (matriz RBAC), luego S1-10, S1-11 y S1-13 (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales) y el commit de S1-07b |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
 | Última actualización | 2026-11-12 |
 
 ## Última actividad
+
+**2026-11-12 · S1-08 · Auth híbrida en el backend (ADR-027).** Sin migraciones nuevas (el modelo es de S1-07b). Contrato en `docs/api-design.md` §3 (actualizado).
+
+| Endpoint | Comportamiento verificado |
+| :--- | :--- |
+| `POST /auth/login` | Operativos con usuario (sin distinguir mayúsculas) y contraseña Argon2id. `401 CREDENCIALES_INVALIDAS` **idéntico** para contraseña incorrecta, usuario inexistente, inactivo o SUPERADMIN, con verificación ficticia para tiempo homogéneo. 5 fallos → bloqueo de 15 min (`429 CUENTA_BLOQUEADA_TEMPORALMENTE`, aun con la contraseña correcta). Rehash si cambian los parámetros |
+| `POST /auth/google` | Solo SUPERADMIN: `email_verified`, `hd` = dominio, correo registrado, activo; fija `google_sub` en el primer login y luego exige que coincida. Operativo → `403 METODO_ACCESO_NO_PERMITIDO`. Sin `GOOGLE_CLIENT_ID` → `503 LOGIN_GOOGLE_NO_DISPONIBLE` |
+| `POST /auth/dev/login` | Solo `ENV=local` (fuera, 404): sesión de SUPERADMIN por correo, sin tocar `google_sub` |
+| `POST /auth/refresh` | Exige `X-Requested-With: trulab-spa`. Rota la sesión (el access token anterior deja de valer). **Reusar un refresh rotado revoca todas las sesiones** del usuario y audita `REFRESH_REUTILIZADO` |
+| `POST /auth/logout` | Revoca la sesión y borra la cookie |
+| `POST /auth/password/forgot` | Siempre `202` con el mismo mensaje. Si la cuenta es operativa y activa: invalida tokens anteriores, crea uno (solo SHA-256, TTL `PASSWORD_RESET_TTL_MINUTES`) y envía el correo **en segundo plano** |
+| `POST /auth/password/reset` | Token de un solo uso; inexistente, usado o vencido → `422 TOKEN_INVALIDO`. Una contraseña débil no consume el token. Revoca todas las sesiones |
+| `POST /auth/password/change` | Verifica la actual (`422 PASSWORD_ACTUAL_INCORRECTA`), exige política y que sea distinta; revoca todas las sesiones y devuelve una nueva |
+| `GET /me` | Perfil (sin cédula ni hash). Permitido con cambio de contraseña pendiente |
+
+- **Cambio obligatorio:** `UsuarioActual` responde `403 CAMBIO_PASSWORD_REQUERIDO` mientras `debe_cambiar_password = true`; solo `/me`, `logout` y `change` usan `UsuarioActualPermitiendoCambio`.
+- **Cada petición** relee usuario y sesión de la BD: desactivar, cerrar sesión o rotar surte efecto de inmediato.
+- **Cookie** `trulab_refresh`: `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, 7 días, `Secure` fuera de local.
+- **Archivos nuevos:** `app/core/security.py`, `app/core/mail.py`, `app/core/rate_limit.py`, `app/modules/auth/{errores,schemas,service,dependencias,google,router}.py`; `main.py` registra los routers (`dev/login` solo en local).
+- **Dependencias (exactas):** `argon2-cffi==25.1.0`, `PyJWT==2.10.1`, `google-auth==2.40.3`, `requests==2.32.4`, `boto3==1.38.46`; las tres primeras también en el hook de mypy. Override de mypy para `google.*`, `boto3`, `botocore` (sin tipos publicados).
+- **Configuración:** `JWT_SECRET` obligatorio (≥ 32), `ACCESS_TOKEN_TTL_MINUTES`, `REFRESH_TOKEN_TTL_DAYS`, `GOOGLE_CLIENT_ID`; `scripts/crear_env.py` ahora genera `JWT_SECRET`. `database_url` y `jwt_secret` no salen en `repr()`.
+- **Frontend:** `src/types/api.ts` regenerado (`gen:api`, +516 líneas); lint, tsc, Prettier y 17 pruebas en verde. Sin pantallas todavía (S1-11).
+
+**Decisiones técnicas de S1-08:**
+- **Sesión validada en BD en cada petición** (join usuario + sesión): una consulta extra a cambio de revocación inmediata (logout, rotación, desactivación).
+- **El claim `pwd_change` es solo informativo**: la autorización usa `debe_cambiar_password` de la BD.
+- **`change` revoca todas las sesiones y emite una nueva**, en lugar de conservar la actual: más simple y cierra cualquier sesión robada con la contraseña vieja.
+- **Detección de reuso del refresh** (no estaba en el contrato): estándar de rotación; se documentó en `docs/api-design.md` §3.
+- **Límite por IP en memoria**: suficiente con una instancia; documentado el reemplazo (WAF o contador compartido) si se escala en AWS. El bloqueo por usuario sí está en la BD.
+- **Correo de `forgot` en `BackgroundTasks`**: la latencia de SES no revela si la cuenta existe; un fallo de envío se registra y no cambia la respuesta.
+- **`SesMailer` con SES v2 e importación diferida de `boto3`**: en local no se carga botocore. Las credenciales vendrán del rol de IAM (S3-07).
+- **`Contexto.crear` descarta IPs no válidas** (`INET`): `TestClient` usa "testclient" como host.
+- **Pruebas de auditoría filtran por `created_at >= now()`**: la BD local puede tener eventos reales (el humo los creó); sin ese filtro 5 pruebas fallaban. Corregido antes del commit.
+
+**Validaciones de S1-08:** **224 pruebas** en `migrate` (69 nuevas: `test_auth.py`, `test_security.py`, `test_mail.py`, `test_config.py`) y **215 + 9 omitidas** en `api`; `alembic check` sin cambios; ruff, `ruff format`, mypy strict y `pre-commit run --all-files` en verde. **Humo contra la API real** (sin mocks): login fallido → 401; login con temporal → cambio pendiente; `/me`; cambio obligatorio (el token viejo queda revocado); refresh con rotación; `forgot` con la misma respuesta para cuenta inexistente; correo con el enlace en el log (`correo_local`); logout; Google sin Client ID → 503; login de desarrollo de `john.hernandez@trulab.co`.
+
+### S1-07b y ajustes previos (misma fecha)
 
 **2026-11-12 · Ajuste: proyecto con esquema híbrido (ADR-031).** Por decisión del dueño del producto, RN-16 y DP-14 cambian para el **proyecto**: se mantiene el catálogo `proyectos` (SUPERADMIN) y los formularios de solicitud y de gasto ofrecen siempre la opción **"Otro"**, que exige escribir el nombre (`proyecto_otro`, `VARCHAR(150)`, 3–150 caracteres, recortado). En `gastos`, `proyecto_id` pasa a nullable con `ck_gastos__proyecto_exclusivo` (exactamente uno). En `viaticos` el "exactamente uno" aplica solo a `CON_SOLICITUD` (`ck_viaticos__proyecto_exclusivo`); en `LEGALIZACION_DIRECTA` ambos son nulos porque el proyecto va en cada gasto. "Otro" no es una fila del catálogo. Errores `422 PROYECTO_REQUERIDO` / `PROYECTO_AMBIGUO`. Indicadores: los nombres escritos se agrupan por texto normalizado con `en_catalogo = false`. Un proyecto escrito no tiene `exige_formato_prestador`, así que se calcula por tarifa (RN-33). Supuesto nuevo S-15. Rubros y células siguen cerrados. Afecta a S2-01/S2-02 (migraciones de `proyectos`, `viaticos` y `gastos`), S2-05/S2-08 (validación) y S3-04 (indicadores); no a S1-08. Documentos: `SPEC.md`, `docs/database-design.md`, `docs/api-design.md`, `docs/user-flows.md`, `docs/architecture.md` (ADR-031) y `CLAUDE.md`.
 
@@ -320,12 +357,14 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **2026-11-12** Actualización documental SPEC v0.4 (ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19, DP-20), commit `f695cbd`
 - [x] **2026-11-12** Tarifas oficiales de `calcularGastos.html` como datos (`05f46f5`)
 - [x] **S1-07b** Credenciales por rol en `usuarios`, `tokens_recuperacion_password`, `Settings` de correo/AWS; 153 pruebas
+- [x] **ADR-031** Proyecto con opción "Otro" (`83cf11c`)
+- [x] **S1-08** Auth híbrida en el backend; 224 pruebas, humo contra la API real
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-08 a S1-11, S1-13 (S1-12 → semana 5)
+- [ ] Sprint 1: S1-09 a S1-11, S1-13 (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**
@@ -335,17 +374,11 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-08** · Auth híbrida (6 h; depende de S1-07b ✅; skills `agent-skills:security-and-hardening`, `agent-skills:test-driven-development`). Contrato en `docs/api-design.md` §3 y `docs/architecture.md` §5:
+**S1-09** · `core/permissions.py`: matriz RBAC (`SPEC.md` §6, `docs/api-design.md` §4), `require_permission()` sobre `UsuarioActual`, `permisos` en `/me`, `SET LOCAL app.usuario_id/app.rol` por transacción en `get_db` (base para el RLS de S2-03) y la **prueba parametrizada** de la matriz (3 h; skills `agent-skills:security-and-hardening`, `agent-skills:test-driven-development`). Incluir los permisos de gestión de SUPERADMIN (`usuarios:gestionar_superadmin`) y de tarifas (`tarifas:gestionar`, `tarifas:leer`).
 
-1. Dependencias exactas: `argon2-cffi`, `PyJWT`, `google-auth` (y `boto3` para el `Mailer` SES, o dejarlo para S2-07 con `MAIL_BACKEND=log`). Variable `JWT_SECRET`.
-2. `core/security.py`: Argon2id (hash, verificación, rehash si cambian los parámetros), JWT de acceso (claim `pwd_change`), refresh opaco con SHA-256, tokens de recuperación.
-3. `core/mail.py`: interfaz `Mailer` con `LogMailer` (solo `ENV=local`) y `SesMailer`.
-4. `POST /auth/login`: respuesta genérica `401 CREDENCIALES_INVALIDAS`, tiempo homogéneo (verificación ficticia), bloqueo tras `LOGIN_MAX_FAILED_ATTEMPTS`, `LOGIN_EXITOSO`/`LOGIN_FALLIDO`; un SUPERADMIN no entra por aquí.
-5. `POST /auth/password/forgot` (siempre 202), `reset` (consumo atómico con `UPDATE … WHERE used_at IS NULL`, revoca sesiones), `change`; `403 CAMBIO_PASSWORD_REQUERIDO` en el resto de endpoints mientras la contraseña sea temporal.
-6. `POST /auth/refresh` (rotación), `POST /auth/logout`, `GET /me`; `POST /auth/google` solo SUPERADMIN (`hd`, `email_verified`, `google_sub`), con login de desarrollo solo en `ENV=local` hasta tener el OAuth Client ID (P-3).
-7. Límite de peticiones en `/auth/*`; regenerar `src/types/api.ts` (`gen:api`) porque cambia el contrato.
+Después **S1-10** (API de cargos y usuarios con contraseña temporal por correo usando `Mailer` y `password_temporal()`, y crear/promover/degradar SUPERADMIN) y **S1-11** (UI de login dual).
 
-Pendiente con el usuario: push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks; confirmar las tarifas de Buga, Cumbre y Cali prestador. En paralelo: P-3, P-6, P-7 (hoja `PROYECTOS`), P-8, P-2 y DP-21.
+Pendiente con el usuario: push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks; confirmar las tarifas de Buga, Cumbre y Cali prestador; OAuth Client ID (P-3) y cuenta AWS/SES (P-6).
 
 ## Decisiones
 
@@ -413,9 +446,11 @@ Pendiente con el usuario: push y PR para la primera ejecución real de la CI; pr
 
 ## Historial de sesiones
 
-### 2026-11-12 · Sesión 6: commit documental, tarifas oficiales y S1-07b
+### 2026-11-12 · Sesión 6: commit documental, tarifas oficiales, S1-07b, ADR-031 y S1-08
 - Commit `f695cbd` (documentación v0.4) y `05f46f5` (tarifas de `calcularGastos.html` como CSV con prueba de integridad).
-- S1-07b: migración `f7a1a890a1d3` (credenciales por rol, tokens de recuperación), seed sin contraseña para SUPERADMIN, `Settings` de correo/AWS. 153 pruebas en verde. Sin push ni merge.
+- S1-07b: migración `f7a1a890a1d3` (credenciales por rol, tokens de recuperación), seed sin contraseña para SUPERADMIN, `Settings` de correo/AWS. 153 pruebas en verde.
+- ADR-031: proyecto con opción "Otro" y `proyecto_otro` (`83cf11c`, solo documentación).
+- S1-08: auth híbrida completa en el backend; 224 pruebas, humo real, tipos del frontend regenerados. Sin push ni merge.
 
 ### 2026-11-12 · Sesión 5: actualización integral del baseline documental (SPEC v0.4)
 - Descongelada la documentación por decisión del dueño del producto. ADR-027 a ADR-030; DP-01 reemplazada, DP-05 resuelta, DP-19 y DP-20 nuevas, DP-21 abierta.

@@ -13,9 +13,16 @@ class Settings(BaseSettings):
     env: Literal["local", "staging", "production"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     # Obligatoria: sin ella la API no arranca. Nunca se registra en logs (contiene la contraseña).
-    database_url: str
+    database_url: str = Field(repr=False)
 
     # --- Acceso híbrido (ADR-027) ---------------------------------------------------------------
+    # Secreto HS256 del access token. Obligatorio; `scripts/crear_env.py` lo genera.
+    jwt_secret: str = Field(min_length=32, repr=False)
+    access_token_ttl_minutes: int = Field(default=15, ge=1, le=60)
+    refresh_token_ttl_days: int = Field(default=7, ge=1, le=30)
+    # Client ID del OAuth de Google (solo login de SUPERADMIN, P-3). Vacío = login con Google
+    # no disponible (en local queda el login de desarrollo).
+    google_client_id: str = ""
     # Dominio corporativo: claim `hd` del login con Google y correo de todo SUPERADMIN (RN-12).
     google_workspace_domain: str = "trulab.co"
     # Primer SUPERADMIN (S1-07): lo crea `python -m app.modules.usuarios.seed` si no hay ninguno.

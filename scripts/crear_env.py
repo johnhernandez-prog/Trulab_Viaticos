@@ -1,11 +1,12 @@
-"""Crea el `.env` local a partir de `.env.example` con contraseñas aleatorias para la BD.
+"""Crea el `.env` local a partir de `.env.example` con contraseñas y secretos aleatorios.
 
 Uso (desde la raíz del repositorio):
     python scripts/crear_env.py            # no sobrescribe un .env existente
     python scripts/crear_env.py --forzar   # lo reemplaza (las contraseñas cambian: ver abajo)
 
 Genera POSTGRES_PASSWORD, OWNER_DB_PASSWORD y APP_DB_PASSWORD (distintas) y las pone también en
-DATABASE_URL_MIGRATIONS y DATABASE_URL. El resto de variables queda como en `.env.example`.
+DATABASE_URL_MIGRATIONS y DATABASE_URL, y un JWT_SECRET de 64 bytes (S1-08). El resto de
+variables queda como en `.env.example`.
 Lo usan la CI (S1-06) y el equipo para el entorno local. Si se reemplaza el .env de un volumen de
 BD ya creado, hay que recrear el volumen (`docker compose down -v`) o reaplicar
 `infra/db/init/10-roles.sh` (ver infra/README.md).
@@ -23,12 +24,15 @@ PLANTILLA = RAIZ / ".env.example"
 DESTINO = RAIZ / ".env"
 
 CONTRASENAS = ("POSTGRES_PASSWORD", "OWNER_DB_PASSWORD", "APP_DB_PASSWORD")
+# Secretos de la aplicación (no son de la BD): se generan con más entropía.
+SECRETOS = ("JWT_SECRET",)
 # Rol de cada URL de conexión → variable con su contraseña.
 URLS = {"trulab_owner": "OWNER_DB_PASSWORD", "trulab_app": "APP_DB_PASSWORD"}
 
 
 def generar(plantilla: str) -> str:
     valores = {nombre: secrets.token_urlsafe(24) for nombre in CONTRASENAS}
+    valores.update({nombre: secrets.token_urlsafe(64) for nombre in SECRETOS})
     lineas = []
     for linea in plantilla.splitlines():
         nombre = linea.split("=", 1)[0]
@@ -38,7 +42,9 @@ def generar(plantilla: str) -> str:
             linea = linea.replace(f"{rol}:CAMBIAR@", f"{rol}:{valores[variable]}@")
         lineas.append(linea)
     resultado = "\n".join(lineas) + "\n"
-    if "CAMBIAR@" in resultado or any(f"\n{n}=\n" in resultado for n in CONTRASENAS):
+    if "CAMBIAR@" in resultado or any(
+        f"\n{n}=\n" in resultado for n in (*CONTRASENAS, *SECRETOS)
+    ):
         raise SystemExit(
             "La plantilla .env.example cambió: no se pudieron completar las contraseñas"
         )
@@ -60,7 +66,8 @@ def main() -> int:
     contenido = generar(PLANTILLA.read_text(encoding="utf-8"))
     DESTINO.write_text(contenido, encoding="utf-8", newline="\n")
     print(
-        f"{DESTINO.name} creado con contraseñas aleatorias para postgres, trulab_owner y trulab_app."
+        f"{DESTINO.name} creado con contraseñas aleatorias (postgres, trulab_owner, trulab_app)"
+        " y JWT_SECRET."
     )
     return 0
 
