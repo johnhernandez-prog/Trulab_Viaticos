@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.db import get_db
+from app.core.db import fijar_contexto_rls, get_db
 from app.core.security import TokenExpiradoError, TokenInvalidoError, decodificar_access_token
 from app.modules.auth.errores import CambioPasswordRequerido, NoAutenticado, TokenExpirado
 from app.modules.auth.models import Sesion
@@ -67,6 +67,8 @@ def _autenticado(
     usuario, revocada = fila
     if revocada is not None or not usuario.activo or usuario.deleted_at is not None:
         raise NoAutenticado()
+    # Contexto de RLS de la petición (defensa en profundidad; las políticas llegan en S2-03).
+    fijar_contexto_rls(session, usuario.id, usuario.rol)
     return Autenticado(usuario=usuario, sesion_id=claims.sesion_id)
 
 

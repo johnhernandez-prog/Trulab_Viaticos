@@ -6,6 +6,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.core.enums import Rol
+from app.core.permissions import Permiso
 
 # Límites de tamaño: evitan cuerpos enormes sin revelar la política (que valida el service).
 Password = Annotated[str, Field(min_length=1, max_length=256)]
@@ -59,6 +60,10 @@ class UsuarioActualSalida(BaseModel):
     debe_cambiar_password: bool
     cargo: Referencia | None
     celula: Referencia | None
+    # Permisos efectivos del rol (S1-09), ordenados. Vacío mientras haya un cambio de contraseña
+    # pendiente: hasta entonces el resto de la API responde 403. La UI solo los usa para mostrar u
+    # ocultar; la autorización real está en el backend.
+    permisos: list[Permiso]
 
 
 class SesionSalida(BaseModel):

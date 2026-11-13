@@ -112,11 +112,13 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 ## Estado actual
 
-**Fase:** **Sprint 1 en curso** (semana 1, F1/F2). **S1-01 a S1-08 terminadas, incluida S1-07b** (estructura, Docker Compose, backend esqueleto, Alembic y roles de BD, frontend esqueleto, CI, modelo de identidad y auditoría con SUPERADMIN inicial, credenciales por rol y tokens de recuperación, y **auth híbrida en el backend**). Sin matriz RBAC, endpoints de negocio ni pantallas funcionales todavía.
+**Fase:** **Sprint 1 en curso** (semana 1, F1/F2). **S1-01 a S1-09 terminadas, incluida S1-07b** (estructura, Docker Compose, backend esqueleto, Alembic y roles de BD, frontend esqueleto, CI, modelo de identidad y auditoría con SUPERADMIN inicial, credenciales por rol y tokens de recuperación, y **auth híbrida en el backend**). Matriz RBAC lista (S1-09); sin endpoints de negocio ni pantallas funcionales todavía.
 
 **2026-11-12: documentación actualizada a SPEC v0.4** por decisión del dueño del producto (solo documentos y `.env.example`, **sin código ni migraciones**): acceso híbrido (ADR-027, reemplaza ADR-006), AWS (ADR-028, cierra DP-05), entidad unificada `viaticos` con solicitud y legalización (ADR-029, DP-19) y tarifas por tipo de vinculación (ADR-030, DP-20). `SPRINTS.md` se replanificó con **S1-07b**, S1-08 redefinida, semana 2 nueva y la **semana 5 de holgura activada**. La documentación vuelve a estar congelada con este nuevo baseline; el detalle vivo está en `HANDOFF.md`.
 
-**S1-07b y S1-08 terminadas** (2026-11-12): credenciales por rol, tokens de recuperación, tarifas oficiales como datos y auth híbrida (`/auth/login`, `google`, `dev/login` solo local, `refresh`, `logout`, `password/forgot|reset|change`, `/me`). **Próxima tarea: S1-09** (matriz RBAC).
+**S1-07b y S1-08 terminadas** (2026-11-12): credenciales por rol, tokens de recuperación, tarifas oficiales como datos y auth híbrida (`/auth/login`, `google`, `dev/login` solo local, `refresh`, `logout`, `password/forgot|reset|change`, `/me`).
+
+**S1-09 terminada** (2026-11-13): matriz RBAC en `app/core/permissions.py` (enum `Permiso` de 24 permisos, `MATRIZ` inmutable), `require_permission()` (403 `SIN_PERMISO`), `permisos` en `/me` (vacía con cambio de contraseña pendiente) y `SET LOCAL app.usuario_id/app.rol` por transacción (`fijar_contexto_rls`). **Próxima tarea: S1-10** (API de cargos y usuarios).
 
 ## Cómo retomar
 

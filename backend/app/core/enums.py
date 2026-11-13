@@ -8,7 +8,7 @@ from enum import StrEnum
 
 
 class Rol(StrEnum):
-    """Rol del usuario (uno por usuario). Determina los permisos; la matriz llega en S1-09."""
+    """Rol del usuario (uno por usuario). Determina los permisos (`app/core/permissions.py`)."""
 
     VIAJERO = "VIAJERO"
     FINANCIERO = "FINANCIERO"

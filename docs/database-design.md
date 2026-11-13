@@ -450,7 +450,7 @@ Todas las FK llevan índice.
 **Objetivo:** que RN-01 se cumpla aunque falle el código de la aplicación (ADR-007).
 
 1. Roles de BD: `trulab_owner` (migraciones) y `trulab_app` (la API, sin `BYPASSRLS` ni propiedad). En RDS, `rds_superuser` solo se usa para el arranque.
-2. En cada transacción: `SET LOCAL app.usuario_id = '<uuid>'; SET LOCAL app.rol = '<ROL>';`.
+2. En cada transacción: `SET LOCAL app.usuario_id = '<uuid>'; SET LOCAL app.rol = '<ROL>';`. **Implementado en S1-09:** `app/core/db.py::fijar_contexto_rls()` (llamada por la autenticación de cada petición) usa `set_config(..., true)` en la transacción actual y un evento `after_begin` lo reaplica en cada transacción nueva de la sesión; el valor nunca queda en una conexión del pool.
 3. RLS en `viaticos`, `viatico_trayectos` y `gastos` (`ENABLE` + `FORCE`).
 4. Políticas:
 

@@ -217,6 +217,12 @@ export interface components {
             /** Identificador */
             identificador: string;
         };
+        /**
+         * Permiso
+         * @description Permisos con formato `recurso:accion`. Es el catálogo completo: `/me` los expone tal cual.
+         * @enum {string}
+         */
+        Permiso: "viaticos:leer_propios" | "viaticos:crear" | "viaticos:calcular_presupuesto" | "viaticos:habilitar_legalizacion" | "gastos:gestionar_propios" | "catalogos:leer" | "viaticos:leer_todos" | "comprobantes:leer_todos" | "pagos:leer" | "cargos:leer" | "tarifas:leer" | "indicadores:leer" | "viaticos:aprobar" | "viaticos:rechazar" | "viaticos:devolver" | "viaticos:gestionar_tiquetes" | "viaticos:registrar_valor_asignado" | "viaticos:cambiar_estado_financiero" | "cargos:gestionar" | "usuarios:gestionar_operativos" | "usuarios:gestionar_superadmin" | "catalogos:gestionar" | "tarifas:gestionar" | "auditoria:leer";
         /** Referencia */
         Referencia: {
             /**
@@ -236,7 +242,7 @@ export interface components {
         };
         /**
          * Rol
-         * @description Rol del usuario (uno por usuario). Determina los permisos; la matriz llega en S1-09.
+         * @description Rol del usuario (uno por usuario). Determina los permisos (`app/core/permissions.py`).
          * @enum {string}
          */
         Rol: "VIAJERO" | "FINANCIERO" | "ADMIN" | "SUPERADMIN";
@@ -290,6 +296,8 @@ export interface components {
             debe_cambiar_password: boolean;
             cargo: components["schemas"]["Referencia"] | null;
             celula: components["schemas"]["Referencia"] | null;
+            /** Permisos */
+            permisos: components["schemas"]["Permiso"][];
         };
         /** ValidationError */
         ValidationError: {

@@ -115,7 +115,9 @@ Un cambio de rol debe ajustar las credenciales en la misma operación. `tokens_r
 | Dependencias | `app/modules/auth/dependencias.py` | `UsuarioActual` (exige que no haya cambio de contraseña pendiente) y `UsuarioActualPermitiendoCambio` (solo `/me`, `logout`, `change`). Leen usuario y sesión **de la BD en cada petición** |
 | Google | `app/modules/auth/google.py` | `verificar_id_token` con `google-auth`; `get_verificador_google` se reemplaza en pruebas |
 
-- Las rutas de negocio nuevas protegen con `autenticado: UsuarioActual` (y desde S1-09, además, el permiso).
+- Las rutas de negocio nuevas se protegen con el permiso (S1-09): `autenticado: Annotated[Autenticado, Depends(require_permission(Permiso.CARGOS_LEER))]` o `dependencies=[Depends(require_permission(...))]`. Incluye `UsuarioActual`; sin permiso → `403 SIN_PERMISO`.
+- **Matriz RBAC** en `app/core/permissions.py` (`Permiso`, `MATRIZ`, `permisos_de`, `tiene_permiso`). Agregar un permiso exige actualizar `docs/api-design.md` §4 y la tabla `ESPERADO` de `tests/test_permisos.py` (escrita a mano a propósito), y regenerar los tipos (`gen:api`), porque `/me` expone el enum.
+- **Contexto de RLS:** la autenticación llama a `fijar_contexto_rls()` (`app/core/db.py`), que fija `app.usuario_id` y `app.rol` con `SET LOCAL` en cada transacción de la sesión; las políticas llegan en S2-03.
 - `JWT_SECRET` es obligatorio (≥ 32 caracteres): `scripts/crear_env.py` lo genera. `GOOGLE_CLIENT_ID` vacío = `/auth/google` responde 503; en local queda `POST /auth/dev/login` (solo SUPERADMIN, la ruta no existe fuera de `ENV=local`).
 - **Pruebas:** la fixture `api` (`tests/conftest.py`) da un `TestClient` cuya API usa la sesión de prueba revertida, un buzón en memoria (`Buzon`) y un verificador de Google falso (`tokens_google`). Para auditoría, filtrar los eventos de la prueba con `Auditoria.created_at >= func.now()` (la prueba es una sola transacción), porque la BD local puede tener eventos reales.
 - `src/types/api.ts` del frontend se generó con `ENV=local`, así que incluye `/auth/dev/login`; la CI también corre en local, así que el contrato coincide.

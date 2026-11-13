@@ -22,6 +22,7 @@ from app.core.audit import AccionAuditoria, registrar
 from app.core.config import Settings
 from app.core.enums import Rol
 from app.core.mail import Correo
+from app.core.permissions import permisos_de
 from app.core.security import (
     emitir_access_token,
     errores_politica_password,
@@ -519,4 +520,5 @@ def perfil(session: Session, usuario: Usuario) -> UsuarioActualSalida:
         debe_cambiar_password=usuario.debe_cambiar_password,
         cargo=Referencia(id=cargo.id, nombre=cargo.nombre) if cargo else None,
         celula=Referencia(id=celula.id, nombre=celula.nombre) if celula else None,
+        permisos=([] if usuario.debe_cambiar_password else sorted(permisos_de(usuario.rol))),
     )

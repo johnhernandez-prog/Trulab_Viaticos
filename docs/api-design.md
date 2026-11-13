@@ -33,7 +33,7 @@ Acceso **híbrido**: usuario y contraseña para `VIAJERO`, `ADMIN` y `FINANCIERO
 | POST | `/auth/password/change` | `{password_actual, nueva_password}`. Cambio voluntario o **obligatorio** del primer acceso; revoca las demás sesiones y emite nueva | Bearer (operativos) |
 | POST | `/auth/refresh` | Cookie de refresh → nuevo access; rota la cookie | Cookie |
 | POST | `/auth/logout` | Revoca la sesión actual y borra la cookie | Bearer |
-| GET | `/me` | Usuario actual: rol, cargo, célula, `es_prestador_servicios`, `debe_cambiar_password` (la lista de `permisos` llega con la matriz RBAC, S1-09) | Bearer |
+| GET | `/me` | Usuario actual: rol, cargo, célula, `es_prestador_servicios`, `debe_cambiar_password` y `permisos` (lista ordenada de la matriz RBAC del rol; **vacía** mientras haya un cambio de contraseña pendiente). La UI solo la usa para mostrar u ocultar | Bearer |
 | POST | `/auth/dev/login` | `{correo}` → sesión de un **SUPERADMIN** sin pasar por Google. **Solo existe con `ENV=local`** (en otro entorno la ruta no se registra: 404); mientras no haya OAuth Client ID (R1.1) | Pública, solo local |
 
 - Encabezado: `Authorization: Bearer <access_token>`. `/auth/refresh` y `/auth/logout` exigen `X-Requested-With: trulab-spa` (junto con `SameSite=Strict`).
@@ -51,7 +51,9 @@ Acceso **híbrido**: usuario y contraseña para `VIAJERO`, `ADMIN` y `FINANCIERO
 
 ## 4. Autorización
 
-- Cada endpoint declara un permiso (`require_permission(...)`). Matriz en `SPEC.md` §6 y `backend/app/core/permissions.py`.
+- Cada endpoint declara un permiso (`require_permission(Permiso.X)`, S1-09). Matriz en `SPEC.md` §6 y `backend/app/core/permissions.py` (enum `Permiso`, `MATRIZ` inmutable); la prueba `tests/test_permisos.py` recorre todas las celdas rol × permiso, también por HTTP.
+- `require_permission` incluye `UsuarioActual` (sesión vigente, sin cambio de contraseña pendiente) y lee el rol **de la BD**: sin token → `401`, sin permiso → `403 SIN_PERMISO` sin revelar cuál faltó (el detalle va al log `permiso_denegado`).
+- El permiso solo dice qué acción puede intentar el rol; el alcance por dueño (`404`), el estado (`409`) y RN-27 los aplica el service.
 - **Recurso ajeno o inexistente → `404`.** Visible pero sin permiso → `403`. Estado/etapa incorrectos → `409`.
 
 | Permiso | Roles |
