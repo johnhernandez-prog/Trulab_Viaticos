@@ -3,11 +3,21 @@
  *
  * - Envía y recibe JSON; los errores llegan como RFC 9457 `application/problem+json` con `code`
  *   estable (docs/api-design.md §7) y se convierten en `ApiError`.
- * - `credentials: "include"`: la cookie httpOnly de refresh viajará con las peticiones (S1-08).
- * - S1-08 agrega aquí el encabezado `Authorization: Bearer` (token en memoria, nunca en
- *   localStorage) y el reintento único tras un 401 llamando a `/auth/refresh`.
+ * - `credentials: "include"`: la cookie httpOnly de refresh viaja con las peticiones (S1-08).
+ * - `Authorization: Bearer` con el access token **en memoria** (`lib/sesion.ts`, S1-11).
+ * - Tras un `401` fuera de `/auth/*`, renueva la sesión **una vez** con `/auth/refresh` y repite
+ *   la petición. Varias peticiones que fallan a la vez comparten un único refresh (el refresh es
+ *   rotativo: dos en paralelo revocarían la sesión por reuso). Si el refresh también falla, avisa
+ *   con `notificarSesionPerdida()` y el `AuthProvider` vuelve al login.
  */
 import { env } from "@/lib/env";
+import { guardarAccessToken, notificarSesionPerdida, obtenerAccessToken } from "@/lib/sesion";
+import type { components } from "@/types/api";
+
+export type SesionApi = components["schemas"]["SesionSalida"];
+
+/** Mitigación CSRF que exigen `/auth/refresh` y `/auth/logout` (junto con SameSite=Strict). */
+export const ENCABEZADO_SPA = { "X-Requested-With": "trulab-spa" } as const;
 
 /** Error de un campo en una respuesta 422 (`errors[]`). */
 export interface ErrorCampo {
@@ -63,6 +73,8 @@ interface ApiErrorExtra {
 export interface OpcionesPeticion extends Omit<RequestInit, "body"> {
   /** Cuerpo a enviar como JSON. */
   json?: unknown;
+  /** `false` evita el refresh automático tras un 401 (login, refresh y demás `/auth/*`). */
+  renovarSiExpira?: boolean;
 }
 
 function esProblema(valor: unknown): valor is ProblemDetails {
@@ -99,15 +111,16 @@ function errorDesdeRespuesta(respuesta: Response, cuerpo: unknown): ApiError {
   });
 }
 
-/**
- * Hace una petición a la API. `ruta` es relativa a la base (`/health`, `/legalizaciones`).
- * Devuelve el JSON de la respuesta (o `undefined` en un 204) y lanza `ApiError` si falla.
- */
-export async function apiRequest<T>(ruta: string, opciones: OpcionesPeticion = {}): Promise<T> {
-  const { json, headers, ...resto } = opciones;
+async function ejecutar<T>(ruta: string, opciones: OpcionesPeticion): Promise<T> {
+  // `renovarSiExpira` es del cliente, no de `fetch`: se separa del resto.
+  const { json, headers, renovarSiExpira, ...resto } = opciones;
   const encabezados = new Headers(headers);
   encabezados.set("Accept", "application/json, application/problem+json");
   if (json !== undefined) encabezados.set("Content-Type", "application/json");
+  const token = obtenerAccessToken();
+  if (token && !encabezados.has("Authorization")) {
+    encabezados.set("Authorization", `Bearer ${token}`);
+  }
 
   let respuesta: Response;
   try {
@@ -126,6 +139,57 @@ export async function apiRequest<T>(ruta: string, opciones: OpcionesPeticion = {
   const cuerpo = await leerJson(respuesta);
   if (!respuesta.ok) throw errorDesdeRespuesta(respuesta, cuerpo);
   return cuerpo as T;
+}
+
+let refreshEnCurso: Promise<SesionApi> | null = null;
+
+/**
+ * Renueva la sesión con la cookie de refresh y guarda el access token nuevo. Las llamadas
+ * simultáneas comparten la misma petición.
+ */
+export function renovarSesion(): Promise<SesionApi> {
+  refreshEnCurso ??= ejecutar<SesionApi>("/auth/refresh", {
+    method: "POST",
+    headers: ENCABEZADO_SPA,
+  })
+    .then((sesion) => {
+      guardarAccessToken(sesion.access_token);
+      return sesion;
+    })
+    .finally(() => {
+      refreshEnCurso = null;
+    });
+  return refreshEnCurso;
+}
+
+function esSesionRechazada(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+/**
+ * Hace una petición a la API. `ruta` es relativa a la base (`/health`, `/viaticos`).
+ * Devuelve el JSON de la respuesta (o `undefined` en un 204) y lanza `ApiError` si falla.
+ */
+export async function apiRequest<T>(ruta: string, opciones: OpcionesPeticion = {}): Promise<T> {
+  const renovar = opciones.renovarSiExpira ?? !ruta.startsWith("/auth/");
+  try {
+    return await ejecutar<T>(ruta, opciones);
+  } catch (error) {
+    if (!renovar || !esSesionRechazada(error)) throw error;
+    try {
+      await renovarSesion();
+    } catch (errorRefresh) {
+      // Sin conexión no es una sesión perdida: se conserva el estado y se propaga el error.
+      if (esSesionRechazada(errorRefresh)) notificarSesionPerdida();
+      throw error;
+    }
+    try {
+      return await ejecutar<T>(ruta, opciones);
+    } catch (errorReintento) {
+      if (esSesionRechazada(errorReintento)) notificarSesionPerdida();
+      throw errorReintento;
+    }
+  }
 }
 
 export const api = {

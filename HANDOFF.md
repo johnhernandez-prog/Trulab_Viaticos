@@ -8,12 +8,27 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-10 ✅ (incluida S1-07b)**; **próxima: S1-11** (UI de login dual), luego S1-13 (S1-12 pasa a la semana 5) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-11 ✅ (incluida S1-07b)**; **próxima: S1-13** (cierre de la semana 1), luego la semana 2 (S2-01) (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
 | Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S1-11 · UI de acceso, AuthProvider, guardas y AppShell.** Sin cambios en el backend.
+
+| Pieza | Comportamiento verificado |
+| :--- | :--- |
+| `lib/api-client.ts` + `lib/sesion.ts` | `Authorization: Bearer` con el token en memoria; tras un 401 fuera de `/auth/*`, un solo `/auth/refresh` compartido entre peticiones simultáneas (rotativo) y reintento; si el refresh se rechaza, sesión perdida; sin conexión, no |
+| `AuthProvider` | Recupera la sesión en silencio al cargar (verificado en Chrome: `/perfil` tras una recarga completa), renueva 1 min antes de vencer, limpia la caché de TanStack Query al salir |
+| `/login` | Usuario/contraseña con validación Zod y mensajes por `code` (incluidos bloqueo y límite); Google GIS solo con `VITE_GOOGLE_CLIENT_ID` (sin él, aviso); "Acceso de desarrollo" solo en `DEV`; vuelve a la ruta pedida (solo internas) o a la vista inicial del rol |
+| Contraseñas | `/olvide-password` (mismo mensaje siempre), `/restablecer-password?token=` (quita el token de la URL; token inválido → cómo pedir otro), `/cambiar-password` obligatorio antes de cualquier pantalla y voluntario desde el perfil; `errors[]` de `PASSWORD_DEBIL` en el campo |
+| Guardas | `RequiereSesion`, `SoloAnonimo`, `RequierePermiso` ("Sin acceso"), `VistaInicial` (V/S → Viáticos, A → Revisión, F → Pagos) |
+| AppShell | BottomBar (≤ 4 destinos + "Más"), Sidebar plegable en tablet (Esc), fija en escritorio, menú de perfil accesible por teclado; menú filtrado por `permisos` |
+
+Verificación: 78 pruebas de Vitest, ESLint, `tsc`, Prettier, build y pre-commit en verde; capturas en Chrome headless a 360, 768 y 1280 px contra la API real (login con error real, acceso de desarrollo, AppShell, "Más", menú de perfil y perfil tras recargar). Dependencias nuevas, versiones exactas: `react-hook-form@7.54.2`, `zod@3.24.1`, `@hookform/resolvers@3.9.1` y (dev) `@testing-library/user-event@14.5.2`. Se borró la página temporal de inicio (S1-05).
+
+**Nota de alcance:** el menú se filtra por permiso, así que ADMIN ve **Tarifas** (tiene `tarifas:leer` en la matriz), aunque la tabla de F-11 no lo lista para ADMIN. Si no debe verlo, hay que decidir si se ajusta la matriz o F-11.
 
 **2026-11-13 · S1-10 · API de cargos, usuarios y auditoría (TDD).** Sin migraciones. Contrato en `docs/api-design.md` §5.1, §5.2 y §5.8 (actualizado).
 
@@ -385,6 +400,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-07b** Credenciales por rol en `usuarios`, `tokens_recuperacion_password`, `Settings` de correo/AWS; 153 pruebas
 - [x] **ADR-031** Proyecto con opción "Otro" (`83cf11c`)
 - [x] **S1-08** Auth híbrida en el backend; 224 pruebas, humo contra la API real
+- [x] **S1-11** UI de acceso, AuthProvider, guardas y AppShell; 78 pruebas de Vitest
 - [x] **S1-10** API de cargos, usuarios y auditoría; 511 pruebas
 - [x] **S1-09** Matriz RBAC, `require_permission`, `permisos` en `/me`, contexto RLS por transacción; 437 pruebas
 
@@ -392,7 +408,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-11, S1-13 (S1-12 → semana 5)
+- [ ] Sprint 1: S1-13 (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**
@@ -402,9 +418,9 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-11** · UI de login dual (7 h; skill `agent-skills:frontend-ui-engineering`): usuario/contraseña + botón Google (y `dev/login` en local), olvidé/restablecer/cambiar contraseña (incluido el cambio obligatorio), `AuthProvider` con access token en memoria y refresh por cookie (`X-Requested-With: trulab-spa`), guardas de ruta y AppShell responsivo con menú según `permisos` de `/me`.
+**S1-13** · Cierre de la semana 1 (0,5 h; skill `claude-mem:handoff`): marcar los criterios de aceptación y el gate de la semana 1 en `SPRINTS.md`, actualizar `HANDOFF.md` y `CLAUDE.md`. Después, **semana 2** desde **S2-01** (catálogos y tarifas; depende de P-7, tarifas validadas).
 
-Después **S1-13** (cierre de la semana 1). S1-12 (UI de cargos y usuarios) queda para la semana 5; mientras tanto, ADMIN puede operar por Swagger.
+S1-12 (UI de cargos y usuarios) queda para la semana 5; mientras tanto, ADMIN puede operar por Swagger.
 
 Pendiente con el usuario: push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks; confirmar las tarifas de Buga, Cumbre y Cali prestador; OAuth Client ID (P-3) y cuenta AWS/SES (P-6).
 

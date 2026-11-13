@@ -112,7 +112,7 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 ## Estado actual
 
-**Fase:** **Sprint 1 en curso** (semana 1, F1/F2). **S1-01 a S1-10 terminadas, incluida S1-07b** (estructura, Docker Compose, backend esqueleto, Alembic y roles de BD, frontend esqueleto, CI, modelo de identidad y auditoría con SUPERADMIN inicial, credenciales por rol y tokens de recuperación, y **auth híbrida en el backend**). Matriz RBAC (S1-09) y API de cargos, usuarios y auditoría (S1-10); sin pantallas funcionales todavía.
+**Fase:** **Sprint 1 en curso** (semana 1, F1/F2). **S1-01 a S1-11 terminadas, incluida S1-07b** (estructura, Docker Compose, backend esqueleto, Alembic y roles de BD, frontend esqueleto, CI, modelo de identidad y auditoría con SUPERADMIN inicial, credenciales por rol y tokens de recuperación, y **auth híbrida en el backend**). Matriz RBAC (S1-09), API de cargos, usuarios y auditoría (S1-10) y UI de acceso y AppShell (S1-11); los módulos de negocio son marcadores hasta la semana 2.
 
 **2026-11-12: documentación actualizada a SPEC v0.4** por decisión del dueño del producto (solo documentos y `.env.example`, **sin código ni migraciones**): acceso híbrido (ADR-027, reemplaza ADR-006), AWS (ADR-028, cierra DP-05), entidad unificada `viaticos` con solicitud y legalización (ADR-029, DP-19) y tarifas por tipo de vinculación (ADR-030, DP-20). `SPRINTS.md` se replanificó con **S1-07b**, S1-08 redefinida, semana 2 nueva y la **semana 5 de holgura activada**. La documentación vuelve a estar congelada con este nuevo baseline; el detalle vivo está en `HANDOFF.md`.
 
@@ -120,7 +120,9 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 **S1-09 terminada** (2026-11-13): matriz RBAC en `app/core/permissions.py` (enum `Permiso` de 24 permisos, `MATRIZ` inmutable), `require_permission()` (403 `SIN_PERMISO`), `permisos` en `/me` (vacía con cambio de contraseña pendiente) y `SET LOCAL app.usuario_id/app.rol` por transacción (`fijar_contexto_rls`).
 
-**S1-10 terminada** (2026-11-13): API de `/cargos` (CRUD, folio `CA-`, borrado lógico, `409 EN_USO`), `/usuarios` (contraseña temporal por correo, SUPERADMIN con `@trulab.co`, promoción/degradación, último SUPERADMIN protegido, revocación de sesiones, `409 ACCION_SOBRE_SI_MISMO`) y `GET /auditoria`; paginación en `app/core/paginacion.py` y errores comunes en `app/core/errors.py`. **Próxima tarea: S1-11** (UI de login dual).
+**S1-10 terminada** (2026-11-13): API de `/cargos` (CRUD, folio `CA-`, borrado lógico, `409 EN_USO`), `/usuarios` (contraseña temporal por correo, SUPERADMIN con `@trulab.co`, promoción/degradación, último SUPERADMIN protegido, revocación de sesiones, `409 ACCION_SOBRE_SI_MISMO`) y `GET /auditoria`; paginación en `app/core/paginacion.py` y errores comunes en `app/core/errors.py`.
+
+**S1-11 terminada** (2026-11-13): login dual (usuario/contraseña, Google GIS si hay `VITE_GOOGLE_CLIENT_ID`, acceso de desarrollo solo en `DEV`), olvidé/restablecer/cambiar contraseña (con el cambio obligatorio), `AuthProvider` (recuperación silenciosa, renovación antes de vencer, token en memoria), guardas por sesión y permiso, y AppShell responsivo con menú por permisos (`components/layout/navegacion.ts`). Formularios con React Hook Form + Zod. **Próxima tarea: S1-13** (cierre de la semana 1); luego la semana 2 (S2-01).
 
 ## Cómo retomar
 

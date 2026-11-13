@@ -74,7 +74,7 @@ frontend/src/
 - **Estado del servidor en TanStack Query; nada de Redux.** Casi todo el estado es remoto. Query resuelve caché, reintentos e invalidación tras las mutaciones (por ejemplo, invalidar `viaticos` y `pagos` después de cambiar el estado financiero).
 - **Tipos generados desde OpenAPI** (`openapi-typescript`). Así hay un contrato único entre frontend y backend y el frontend no se desincroniza.
 - **Token de acceso en memoria** (nunca en `localStorage`). El refresh token vive en una cookie httpOnly (§5). `apiClient` reintenta una vez tras un 401 llamando a `/auth/refresh`.
-- **Permisos en el frontend solo para la experiencia** (ocultar botones y rutas). `usePermissions()` lee el rol de `/me`. La autoridad es el backend.
+- **Permisos en el frontend solo para la experiencia** (ocultar botones y rutas). `usePermisos()` (S1-11) lee la lista `permisos` de `/me`, que sale de la matriz RBAC del backend; el menú y las guardas de ruta la usan. La autoridad es el backend.
 - **Cálculo tarifario sin lógica en el cliente:** el formulario de solicitud llama a `POST /viaticos/calcular-presupuesto` para la vista previa; la SPA nunca calcula ni envía importes (RN-29).
 - **Mobile-first:** en el teléfono la lista de viáticos se muestra como tarjetas, y desde `lg` como tabla. El layout cambia de *BottomBar* a *Sidebar* (`docs/design-system.md` §12).
 - **Captura de cámara:** `<input type="file" accept="image/*,application/pdf" capture="environment">`. Las imágenes se comprimen en el cliente (máximo ~1600 px, JPEG al 80 %) antes de subir, para redes móviles lentas.
