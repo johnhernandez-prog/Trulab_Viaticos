@@ -281,6 +281,162 @@ export interface paths {
         patch: operations["editar_api_v1_cargos__cargo_id__patch"];
         trace?: never;
     };
+    "/api/v1/catalogos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catálogos activos para los selectores (todos los roles) */
+        get: operations["listar_combinado_api_v1_catalogos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/tarifas-viaticos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar tarifas de viáticos */
+        get: operations["listar_tarifas_api_v1_catalogos_tarifas_viaticos_get"];
+        put?: never;
+        /** Crear tarifa (ciudad + tipo de vinculación) */
+        post: operations["crear_tarifa_api_v1_catalogos_tarifas_viaticos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/tarifas-viaticos/{tarifa_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de una tarifa */
+        get: operations["detalle_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Editar valores y orden de una tarifa (no afecta solicitudes ya calculadas) */
+        patch: operations["editar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/catalogos/tarifas-viaticos/{tarifa_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desactivar tarifa */
+        post: operations["desactivar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__desactivar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/tarifas-viaticos/{tarifa_id}/activar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivar tarifa */
+        post: operations["activar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__activar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/{tipo}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar un catálogo completo, con su uso (solo SUPERADMIN) */
+        get: operations["listar_admin_api_v1_catalogos__tipo__get"];
+        put?: never;
+        /** Crear un valor de catálogo (solo SUPERADMIN) */
+        post: operations["crear_api_v1_catalogos__tipo__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/{tipo}/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Renombrar u ordenar un valor de catálogo */
+        patch: operations["editar_api_v1_catalogos__tipo___item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/catalogos/{tipo}/{item_id}/desactivar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desactivar un valor de catálogo (RN-24) */
+        post: operations["desactivar_api_v1_catalogos__tipo___item_id__desactivar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogos/{tipo}/{item_id}/activar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivar un valor de catálogo */
+        post: operations["activar_api_v1_catalogos__tipo___item_id__activar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auditoria": {
         parameters: {
             query?: never;
@@ -364,6 +520,89 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * CatalogoAdmin
+         * @description Fila con todo el detalle y el uso, para la administración (`GET /catalogos/{tipo}`, S).
+         */
+        CatalogoAdmin: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nombre */
+            nombre: string;
+            /** Codigo */
+            codigo?: string | null;
+            /** Exige Formato Prestador */
+            exige_formato_prestador?: boolean | null;
+            /** Activo */
+            activo: boolean;
+            /** Orden */
+            orden: number | null;
+            /** Uso */
+            uso: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** CatalogoCrear */
+        CatalogoCrear: {
+            /** Nombre */
+            nombre: string;
+            /** Orden */
+            orden?: number | null;
+            /** Codigo */
+            codigo?: string | null;
+            /** Exige Formato Prestador */
+            exige_formato_prestador?: boolean | null;
+        };
+        /** CatalogoEditar */
+        CatalogoEditar: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Orden */
+            orden?: number | null;
+            /** Codigo */
+            codigo?: string | null;
+            /** Exige Formato Prestador */
+            exige_formato_prestador?: boolean | null;
+        };
+        /**
+         * CatalogoResumen
+         * @description Fila activa para los selectores (`GET /catalogos`, V F A S).
+         */
+        CatalogoResumen: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nombre */
+            nombre: string;
+            /** Codigo */
+            codigo?: string | null;
+            /** Exige Formato Prestador */
+            exige_formato_prestador?: boolean | null;
+        };
+        /** CatalogosSalida */
+        CatalogosSalida: {
+            /** Proyectos */
+            proyectos: components["schemas"]["CatalogoResumen"][];
+            /** Rubros */
+            rubros: components["schemas"]["CatalogoResumen"][];
+            /** Celulas */
+            celulas: components["schemas"]["CatalogoResumen"][];
+            /** Ciudades */
+            ciudades: string[];
+        };
         /** DevLoginEntrada */
         DevLoginEntrada: {
             /** Correo */
@@ -440,6 +679,17 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** Pagina[TarifaSalida] */
+        Pagina_TarifaSalida_: {
+            /** Items */
+            items: components["schemas"]["TarifaSalida"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /** Pagina[UsuarioResumen] */
         Pagina_UsuarioResumen_: {
             /** Items */
@@ -509,6 +759,85 @@ export interface components {
             /** Debe Cambiar Password */
             debe_cambiar_password: boolean;
             usuario: components["schemas"]["UsuarioActualSalida"];
+        };
+        /** TarifaCrear */
+        TarifaCrear: {
+            /** Ciudad */
+            ciudad: string;
+            /** Es Prestador Servicios */
+            es_prestador_servicios: boolean;
+            /** Vr Alimentacion */
+            vr_alimentacion: number | string;
+            /** Otros Gastos */
+            otros_gastos: number | string;
+            /** Transporte Aeropuerto */
+            transporte_aeropuerto: number | string;
+            /** Transporte Intermunicipal */
+            transporte_intermunicipal: number | string;
+            /** Trans Interno Dia 1 */
+            trans_interno_dia_1: number | string;
+            /** Trans Interno Varios Dias */
+            trans_interno_varios_dias: number | string;
+            /** Orden */
+            orden?: number | null;
+        };
+        /**
+         * TarifaEditar
+         * @description Solo valores y orden (docs/api-design.md §5.3): `ciudad` y el tipo no se editan.
+         */
+        TarifaEditar: {
+            /** Vr Alimentacion */
+            vr_alimentacion?: number | string | null;
+            /** Otros Gastos */
+            otros_gastos?: number | string | null;
+            /** Transporte Aeropuerto */
+            transporte_aeropuerto?: number | string | null;
+            /** Transporte Intermunicipal */
+            transporte_intermunicipal?: number | string | null;
+            /** Trans Interno Dia 1 */
+            trans_interno_dia_1?: number | string | null;
+            /** Trans Interno Varios Dias */
+            trans_interno_varios_dias?: number | string | null;
+            /** Orden */
+            orden?: number | null;
+        };
+        /** TarifaSalida */
+        TarifaSalida: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ciudad */
+            ciudad: string;
+            /** Es Prestador Servicios */
+            es_prestador_servicios: boolean;
+            /** Vr Alimentacion */
+            vr_alimentacion: string;
+            /** Otros Gastos */
+            otros_gastos: string;
+            /** Transporte Aeropuerto */
+            transporte_aeropuerto: string;
+            /** Transporte Intermunicipal */
+            transporte_intermunicipal: string;
+            /** Trans Interno Dia 1 */
+            trans_interno_dia_1: string;
+            /** Trans Interno Varios Dias */
+            trans_interno_varios_dias: string;
+            /** Activo */
+            activo: boolean;
+            /** Orden */
+            orden: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** UsuarioActualSalida */
         UsuarioActualSalida: {
@@ -1311,6 +1640,391 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CargoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_combinado_api_v1_catalogos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogosSalida"];
+                };
+            };
+        };
+    };
+    listar_tarifas_api_v1_catalogos_tarifas_viaticos_get: {
+        parameters: {
+            query?: {
+                ciudad?: string | null;
+                es_prestador_servicios?: boolean | null;
+                activo?: boolean | null;
+                sort?: "ciudad" | "-ciudad" | "created_at" | "-created_at";
+                /** @description Página, desde 1 */
+                page?: number;
+                /** @description Tamaño de página (máx. 100) */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina_TarifaSalida_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_tarifa_api_v1_catalogos_tarifas_viaticos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TarifaCrear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifa_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifa_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TarifaEditar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__desactivar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifa_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_tarifa_api_v1_catalogos_tarifas_viaticos__tarifa_id__activar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifa_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_admin_api_v1_catalogos__tipo__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo: "proyectos" | "rubros" | "celulas";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoAdmin"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_api_v1_catalogos__tipo__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo: "proyectos" | "rubros" | "celulas";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogoCrear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_api_v1_catalogos__tipo___item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo: "proyectos" | "rubros" | "celulas";
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogoEditar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desactivar_api_v1_catalogos__tipo___item_id__desactivar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo: "proyectos" | "rubros" | "celulas";
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_api_v1_catalogos__tipo___item_id__activar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo: "proyectos" | "rubros" | "celulas";
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogoResumen"];
                 };
             };
             /** @description Validation Error */

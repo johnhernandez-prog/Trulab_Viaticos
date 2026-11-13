@@ -12,7 +12,7 @@ from app.core.security import emitir_access_token
 from app.modules.archivos.models import Archivo
 from app.modules.auth.models import Sesion
 from app.modules.cargos.models import Cargo
-from app.modules.catalogos.models import Celula, Proyecto, Rubro
+from app.modules.catalogos.models import Celula, Proyecto, Rubro, TarifaViatico
 from app.modules.gastos.models import Gasto
 from app.modules.usuarios.models import Usuario
 from app.modules.viaticos.models import Viatico
@@ -105,6 +105,24 @@ def crear_rubro(session: Session, nombre: str | None = None) -> Rubro:
     session.add(rubro)
     session.flush()
     return rubro
+
+
+def crear_tarifa(session: Session, **campos: object) -> TarifaViatico:
+    valores: dict[str, object] = {
+        "ciudad": f"Ciudad {uuid.uuid4().hex[:8]}",
+        "es_prestador_servicios": False,
+        "vr_alimentacion": Decimal("50000"),
+        "otros_gastos": Decimal("10000"),
+        "transporte_aeropuerto": Decimal("30000"),
+        "transporte_intermunicipal": Decimal("20000"),
+        "trans_interno_dia_1": Decimal("15000"),
+        "trans_interno_varios_dias": Decimal("25000"),
+    }
+    valores.update(campos)
+    tarifa = TarifaViatico(**valores)
+    session.add(tarifa)
+    session.flush()
+    return tarifa
 
 
 def crear_archivo(session: Session, **campos: object) -> Archivo:

@@ -7,13 +7,37 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| Fase | **Semana 1 cerrada (gate cumplido el 2026-11-13)**; empieza la **semana 2** (F4/F5). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-02 ✅** (migración del modelo unificado, con el seed de tarifas de S2-01); **próxima: S2-01 (API de catálogos y tarifas)** y S2-03 (RLS) (S1-12 pasa a la semana 5) |
-| Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
+| Fase | **Semana 1 cerrada (gate cumplido el 2026-11-13)**; **semana 2 en curso** (F4/F5). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
+| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-01 ✅ y S2-02 ✅** (catálogos, tarifas y el modelo unificado); **próxima: S2-03 (RLS sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos`)** |
+| Código | Backend: esqueleto FastAPI + Alembic + roles de BD; auth híbrida completa (S1-08); RBAC de 24 permisos (S1-09); API de `/cargos`, `/usuarios`, `/auditoria` (S1-10); modelo unificado de `viaticos`/`gastos`/`archivos`/catálogos/tarifas (S2-02); **API de `/catalogos` y `/catalogos/tarifas-viaticos` (S2-01)**. Frontend: login dual, `AuthProvider`, guardas y AppShell responsivo (S1-11); sin pantallas de catálogos/tarifas ni de viáticos todavía |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge), hasta `07e214c` (S2-02); **pendiente de commit: S2-01** (API de catálogos y tarifas) |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S2-01 · API de `/catalogos` y `/catalogos/tarifas-viaticos` (TDD).** Sin migraciones nuevas (el modelo y el seed son de S2-02). Contrato en `docs/api-design.md` §5.3 (actualizado, con "Implementado en S2-01").
+
+| Pieza | Comportamiento verificado |
+| :--- | :--- |
+| `GET /catalogos` (`catalogos:leer`, V F A S) | Combina `proyectos`/`rubros`/`celulas` **activos** (ordenados por `orden`, luego nombre) y `ciudades` (tarifas activas del tipo de vinculación del usuario autenticado); "Otro" no viene en la lista (lo agrega la UI, ADR-031) |
+| `GET /catalogos/{tipo}` (`catalogos:gestionar`, solo S) | Todas las filas, activas e inactivas, con `uso` informativo: `proyectos` suma `viaticos.proyecto_id` + `gastos.proyecto_id` (sin los eliminados); `rubros`, `gastos.rubro_id`; `celulas`, **todos** los usuarios (activos o no), igual que `/cargos`. `{tipo}` inválido → `422` (FastAPI valida el `Literal`) |
+| `POST`/`PATCH /catalogos/{tipo}` | `nombre` único sin distinguir mayúsculas (`409 DUPLICADO`); `codigo`/`exige_formato_prestador` solo para `proyectos` (`422 VALOR_NO_PERMITIDO` en los otros tipos); `codigo` único entre los no nulos; `PATCH` no deja `nombre` en `null` |
+| `POST /catalogos/{tipo}/{id}/desactivar` · `/activar` | **Sin `DELETE`** en ningún catálogo (RN-24): idempotentes (sin auditoría si no hay cambio) y **sin** bloquear por `uso` (a diferencia de `/cargos`, desactivar algo en uso es válido) |
+| `GET /catalogos/tarifas-viaticos` (`tarifas:leer`, F A S) | Paginado; filtros `ciudad` (`ILIKE`), `es_prestador_servicios`, `activo` |
+| `POST /catalogos/tarifas-viaticos` (`tarifas:gestionar`, solo S) | Los 6 montos como `Dinero` (ADR-012: acepta número o string, siempre **sale como string** con la precisión de `NUMERIC(14,2)`); `< 0` → `422`; `409 DUPLICADO` por `(lower(ciudad), es_prestador_servicios)`; misma ciudad con el otro tipo sí se puede crear |
+| `PATCH /catalogos/tarifas-viaticos/{id}` | Solo valores y `orden`: `ciudad`/`es_prestador_servicios` no se aceptan (`422 VALIDACION`, `extra="forbid"`); no afecta los trayectos ya calculados (instantánea, S2-04) |
+| `POST .../desactivar` · `/activar` | Igual que los catálogos: idempotente, sin `DELETE` |
+| Auditoría | `CATALOGO_CREAR`, `CATALOGO_EDITAR` (antes/después), `CATALOGO_DESACTIVAR`, `CATALOGO_ACTIVAR` (entidad `catalogos`, con `tipo`); `TARIFA_CREAR`, `TARIFA_EDITAR` (antes/después), `TARIFA_DESACTIVAR`, `TARIFA_ACTIVAR` (entidad `tarifas_viaticos`), siempre con actor, IP y user agent |
+
+**Piezas nuevas:** `app/core/types.py` (`Dinero`: `Annotated[Decimal, BeforeValidator, PlainSerializer]`, reutilizable por `gastos`/`viaticos`); `app/modules/catalogos/{schemas,service,router}.py`; `AccionAuditoria.CATALOGO_ACTIVAR` y las cuatro acciones `TARIFA_*` nuevas en `app/core/audit.py`; `crear_tarifa()` en `tests/fabricas.py`. Router registrado en `main.py` antes de `/{tipo}` que usan ambos.
+
+**Decisiones técnicas de S2-01:**
+- **`codigo`/`exige_formato_prestador` en un esquema compartido** (`CatalogoCrear`/`CatalogoEditar` con esos dos campos opcionales) en vez de un esquema por tipo: una sola ruta genérica `/catalogos/{tipo}` para los tres catálogos, con el service rechazando esos campos fuera de `proyectos`. Más simple que esquemas condicionales por `tipo` en FastAPI/OpenAPI a cambio de una validación explícita en el service.
+- **`uso` no bloquea `desactivar`:** a diferencia de `/cargos` (que sí elimina y por eso exige `409 EN_USO`), los catálogos solo se desactivan; desactivar algo en uso es una operación válida y reversible (`RN-24`), así que `uso` es puramente informativo para la UI de administración.
+- **`Dinero` en `app/core/types.py`:** primer endpoint con dinero en el contrato; se centralizó el tipo (en vez de definirlo dentro de `catalogos`) porque `gastos`/`viaticos` (S2-04/S2-05) lo van a reutilizar.
+- **`TarifaEditar` sin `ciudad`/`es_prestador_servicios`:** cambiarlos equivaldría a mover la fila a otra combinación con su propia unicidad; el contrato documentado ya decía "valores y orden", así que se excluyeron del esquema en vez de validarlos en el service.
+
+**Validaciones de S2-01:** **641 pruebas** (583 + 58 nuevas: `test_catalogos_api.py`, `test_tarifas_api.py`) en `migrate`; ruff, `ruff format`, mypy strict y `pre-commit run --all-files` en verde. Frontend: `gen:api` (+714 líneas en `src/types/api.ts`), ESLint, tsc, Prettier, 78 pruebas Vitest y build en verde.
 
 **2026-11-13 · S2-01 (modelo) y S2-02 · Migración del modelo unificado.** Migración `2c36be2a3312` (`20261113_1349_catalogos_viaticos_y_gastos`) sobre `f7a1a890a1d3`.
 

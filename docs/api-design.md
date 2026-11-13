@@ -129,6 +129,35 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 
 > `tarifas-viaticos` es un literal fijo y se registra antes que la ruta `/{tipo}` para evitar ambigüedad.
 
+**Implementado en S2-01.** Detalles del contrato:
+
+- `GET /catalogos` (`catalogos:leer`, V F A S): combina los tres catálogos (solo filas activas,
+  ordenadas por `orden` y luego por nombre) y `ciudades` (tarifas activas del tipo de vinculación
+  —`es_prestador_servicios`— del usuario autenticado). `rubros`/`celulas` siempre traen `codigo` y
+  `exige_formato_prestador` en `null`.
+- `GET /catalogos/{tipo}` (`catalogos:gestionar`, solo S): todas las filas (activas e inactivas),
+  con `uso` (entero, informativo). El `uso` de `proyectos` suma `viaticos.proyecto_id` +
+  `gastos.proyecto_id` (sin los eliminados lógicamente); el de `rubros`, `gastos.rubro_id`; el de
+  `celulas`, **todos** los usuarios con esa célula, activos o no (igual que `cargos`). `{tipo}`
+  fuera de `proyectos`/`rubros`/`celulas` → `422 VALIDACION` (FastAPI valida el `Literal`).
+- `POST`/`PATCH /catalogos/{tipo}`: `codigo` y `exige_formato_prestador` solo se aceptan para
+  `proyectos`; enviarlos para `rubros`/`celulas` → `422 VALOR_NO_PERMITIDO` con el campo. `nombre`
+  único sin distinguir mayúsculas entre **todas** las filas (no hay borrado lógico que libere el
+  nombre); `codigo` único entre los no nulos. `PATCH` no permite dejar `nombre` en `null`.
+- **Sin `DELETE`** en ningún catálogo ni en tarifas (RN-24): `desactivar`/`activar` son
+  **idempotentes** (sin cambios ni auditoría si ya estaban en ese estado) y **no** verifican el
+  `uso`: desactivar algo en uso es válido (solo deja de verse en los selectores); por eso no hay
+  `409 EN_USO` aquí, a diferencia de `/cargos`.
+- `POST`/`PATCH /catalogos/tarifas-viaticos`: los 6 montos aceptan número o string en la entrada
+  (`Dinero`, ADR-012) y **siempre** salen como string (`"150000.00"`, con la precisión de
+  `NUMERIC(14,2)`); `< 0` → `422 VALIDACION`. `PATCH` **no** acepta `ciudad` ni
+  `es_prestador_servicios` (identifican la fila); enviarlos → `422 VALIDACION` (`extra="forbid"`).
+  `409 DUPLICADO` por `(lower(ciudad), es_prestador_servicios)`.
+- Auditoría: `CATALOGO_CREAR`, `CATALOGO_EDITAR` (antes/después), `CATALOGO_DESACTIVAR`,
+  `CATALOGO_ACTIVAR` (entidad `catalogos`, con `tipo` en `datos`); `TARIFA_CREAR`, `TARIFA_EDITAR`
+  (antes/después), `TARIFA_DESACTIVAR`, `TARIFA_ACTIVAR` (entidad `tarifas_viaticos`), siempre con
+  el actor, la IP y el user agent.
+
 ### 5.4 Viáticos (entidad unificada, ADR-029)
 
 | Método | Ruta | Roles | Notas |

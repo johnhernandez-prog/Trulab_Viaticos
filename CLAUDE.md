@@ -126,7 +126,9 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 **S1-13 terminada** (2026-11-13): semana 1 cerrada. ADMIN conserva `tarifas:leer` (decisión del dueño del producto; F-11 actualizada).
 
-**S2-02 terminada** (2026-11-13): migración `2c36be2a3312` con `proyectos`, `rubros`, `tarifas_viaticos` (seed de 44 filas leído del CSV), `archivos`, `viaticos` (`VT-`, `valor_transferido` generado), `viatico_trayectos`, `viatico_eventos` (solo inserción con trigger), `gastos` y `v_viatico_saldos`; modelos en `app/modules/{catalogos,archivos,viaticos,gastos}/models.py` y enums en `app/core/enums.py`. **Próxima: S2-01 (API de catálogos y tarifas)**, luego S2-03 (RLS).
+**S2-02 terminada** (2026-11-13): migración `2c36be2a3312` con `proyectos`, `rubros`, `tarifas_viaticos` (seed de 44 filas leído del CSV), `archivos`, `viaticos` (`VT-`, `valor_transferido` generado), `viatico_trayectos`, `viatico_eventos` (solo inserción con trigger), `gastos` y `v_viatico_saldos`; modelos en `app/modules/{catalogos,archivos,viaticos,gastos}/models.py` y enums en `app/core/enums.py`.
+
+**S2-01 terminada** (2026-11-13): API de `/catalogos` (selectores activos para V F A S; administración con `uso` informativo, crear, editar, activar/desactivar sin `DELETE`, solo SUPERADMIN) y `/catalogos/tarifas-viaticos` (lectura F A S; gestión solo SUPERADMIN, dinero como string con `app/core/types.py::Dinero`, ADR-012). Auditoría `CATALOGO_*`/`TARIFA_*`. **641 pruebas** en verde. **Próxima: S2-03 (RLS sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos`, con pruebas de aislamiento reales usando `trulab_app`)**.
 
 ## Cómo retomar
 
