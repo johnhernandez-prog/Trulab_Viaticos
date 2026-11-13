@@ -7,13 +7,15 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-11 ✅ (incluida S1-07b)**; **próxima: S1-13** (cierre de la semana 1), luego la semana 2 (S2-01) (S1-12 pasa a la semana 5) |
+| Fase | **Semana 1 cerrada (gate cumplido el 2026-11-13)**; empieza la **semana 2** (F4/F5). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
+| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-01** (modelo) y **S2-02** (migración) en curso (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
 | Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S1-13 · Cierre de la semana 1.** Gate cumplido: los 9 criterios de aceptación de `SPRINTS.md` están marcados (el de Google, probado con un verificador falso; el login real espera P-3). Commits en `feat/f1-estructura-monorepo`: `d16ef75` (S1-09), `6fa49ef` (S1-10), `8b81bb9` (S1-11). Siguen pendientes, sin bloquear: push y primera CI en GitHub, OAuth Client ID (P-3), AWS/SES (P-6), hoja `PROYECTOS` (P-7) y S1-12 (semana 5).
 
 **2026-11-13 · S1-11 · UI de acceso, AuthProvider, guardas y AppShell.** Sin cambios en el backend.
 
@@ -28,7 +30,7 @@
 
 Verificación: 78 pruebas de Vitest, ESLint, `tsc`, Prettier, build y pre-commit en verde; capturas en Chrome headless a 360, 768 y 1280 px contra la API real (login con error real, acceso de desarrollo, AppShell, "Más", menú de perfil y perfil tras recargar). Dependencias nuevas, versiones exactas: `react-hook-form@7.54.2`, `zod@3.24.1`, `@hookform/resolvers@3.9.1` y (dev) `@testing-library/user-event@14.5.2`. Se borró la página temporal de inicio (S1-05).
 
-**Nota de alcance:** el menú se filtra por permiso, así que ADMIN ve **Tarifas** (tiene `tarifas:leer` en la matriz), aunque la tabla de F-11 no lo lista para ADMIN. Si no debe verlo, hay que decidir si se ajusta la matriz o F-11.
+**Decisión (2026-11-13, dueño del producto):** ADMIN conserva `tarifas:leer` (referencia en solo lectura al auditar solicitudes); F-11 se actualizó para listar Tarifas en su menú.
 
 **2026-11-13 · S1-10 · API de cargos, usuarios y auditoría (TDD).** Sin migraciones. Contrato en `docs/api-design.md` §5.1, §5.2 y §5.8 (actualizado).
 
@@ -408,7 +410,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-13 (S1-12 → semana 5)
+- [x] Sprint 1 (S1-12 pasa a la semana 5) (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**

@@ -43,7 +43,7 @@
 | **S1-10** | ✅ API de cargos y usuarios (CRUD; contraseña temporal por correo y restablecimiento; **crear/promover/degradar SUPERADMIN** con `@trulab.co`, protección del último SUPERADMIN; auditoría de rol y `SUPERADMIN_ASIGNADO`) | 5 h | S1-09 | `agent-skills:api-and-interface-design`, `agent-skills:test-driven-development` |
 | **S1-11** | ✅ UI: **login dual** (usuario/contraseña + botón Google), olvidé/restablecer/cambiar contraseña (incluido el cambio obligatorio), AuthProvider, guardas de ruta, AppShell responsivo (BottomBar / Sidebar plegable / Sidebar fija) con menú por rol | 7 h | S1-05, S1-08 | `agent-skills:frontend-ui-engineering` |
 | S1-12 | → **semana 5.** UI: Cargos y Usuarios (tabla en escritorio, tarjetas en móvil, formularios, confirmaciones, alta de operativos y gestión de SUPERADMIN) | 4 h | S1-10, S1-11 | `agent-skills:frontend-ui-engineering` |
-| S1-13 | Cierre: actualizar `HANDOFF.md` y `CLAUDE.md` (estado) | 0,5 h | — | `claude-mem:handoff` |
+| **S1-13** | ✅ Cierre: actualizar `HANDOFF.md` y `CLAUDE.md` (estado) | 0,5 h | — | `claude-mem:handoff` |
 | | **Total** | **≈ 46,5 h** (S1-01 a S1-07 ya hechas: 19 h) | | ⚠️ Supera la capacidad en unas 16 h; ver riesgos |
 
 **Riesgos:**
@@ -56,17 +56,19 @@
 **Entregables:** repositorio con CI en verde; `docker compose up` levanta todo; login de operativos (usuario/contraseña, recuperación) y de SUPERADMIN (Google); CRUD de cargos y usuarios por API (UI en semana 5).
 
 **Criterios de aceptación:**
-- [ ] Un VIAJERO/ADMIN/FINANCIERO activo entra con usuario y contraseña; credenciales erróneas, usuario inactivo o inexistente reciben el **mismo** 401 genérico.
-- [ ] La contraseña temporal obliga al cambio: el resto de la API responde 403 `CAMBIO_PASSWORD_REQUERIDO` hasta cambiarla.
-- [ ] `forgot` responde siempre 202; el token es de un solo uso, vence a los 15–30 min, se guarda solo como hash y restablecer revoca las sesiones.
-- [ ] Un SUPERADMIN `@trulab.co` entra con Google; no puede usar `/auth/login`; un operativo no puede usar `/auth/google`; otro dominio o no registrado recibe 403 claro.
-- [ ] 5 fallos de login bloquean temporalmente; todo queda en `auditoria`; nunca se registran contraseñas, hashes ni tokens.
-- [ ] El access token no está en `localStorage`; el refresh renueva la sesión; el logout la revoca.
-- [ ] La prueba parametrizada de la matriz RBAC cubre cargos y usuarios para los 4 roles.
-- [ ] ADMIN no puede crear, promover ni modificar SUPERADMIN; un SUPERADMIN sí (con `@trulab.co` y `SUPERADMIN_ASIGNADO`); nadie puede desactivar ni degradar al último SUPERADMIN activo.
-- [ ] El layout funciona en 360, 768 y 1280 px.
+- [x] Un VIAJERO/ADMIN/FINANCIERO activo entra con usuario y contraseña; credenciales erróneas, usuario inactivo o inexistente reciben el **mismo** 401 genérico.
+- [x] La contraseña temporal obliga al cambio: el resto de la API responde 403 `CAMBIO_PASSWORD_REQUERIDO` hasta cambiarla.
+- [x] `forgot` responde siempre 202; el token es de un solo uso, vence a los 15–30 min, se guarda solo como hash y restablecer revoca las sesiones.
+- [x] Un SUPERADMIN `@trulab.co` entra con Google; no puede usar `/auth/login`; un operativo no puede usar `/auth/google`; otro dominio o no registrado recibe 403 claro. *(Probado con un verificador de Google falso; el login real espera el OAuth Client ID, P-3.)*
+- [x] 5 fallos de login bloquean temporalmente; todo queda en `auditoria`; nunca se registran contraseñas, hashes ni tokens.
+- [x] El access token no está en `localStorage`; el refresh renueva la sesión; el logout la revoca.
+- [x] La prueba parametrizada de la matriz RBAC cubre cargos y usuarios para los 4 roles.
+- [x] ADMIN no puede crear, promover ni modificar SUPERADMIN; un SUPERADMIN sí (con `@trulab.co` y `SUPERADMIN_ASIGNADO`); nadie puede desactivar ni degradar al último SUPERADMIN activo.
+- [x] El layout funciona en 360, 768 y 1280 px.
 
 **Gate de salida de la semana 1:** auth híbrida y RBAC en el backend terminados y probados (S1-07b, S1-08, S1-09 y S1-10), y UI de login (S1-11). Sin esto no se empieza la semana 2.
+
+> ✅ **Gate cumplido el 2026-11-13** (S1-13). Pendientes que no bloquean: login real con Google (P-3), primera ejecución de la CI en GitHub (requiere push) y S1-12 (UI de cargos y usuarios, movida a la semana 5).
 
 ---
 

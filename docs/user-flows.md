@@ -277,9 +277,11 @@ El viático tiene **tres dimensiones independientes** y un espejo:
 | Rol | Menú visible | Vista inicial |
 | :--- | :--- | :--- |
 | VIAJERO | Viáticos · Perfil (firma, fecha de nacimiento, contraseña) | Viáticos (propios) |
-| ADMIN | Viáticos · Revisión · Pagos (lectura) · Indicadores · Cargos · Usuarios | Revisión (pendientes) |
+| ADMIN | Viáticos · Revisión · Pagos (lectura) · Indicadores · Cargos · Usuarios · Tarifas (lectura: referencia al auditar solicitudes) | Revisión (pendientes) |
 | FINANCIERO | Viáticos · Pagos · Indicadores · Cargos (lectura) · Tarifas (lectura) | Pagos |
 | SUPERADMIN | Todo lo anterior + Catálogos y Tarifas (edición) + Superadministradores (+ Auditoría, post-MVP) | Viáticos (todos) |
+
+El menú se arma con los `permisos` de `/me` (matriz RBAC del backend): cada módulo exige su permiso (`frontend/src/components/layout/navegacion.ts`), así que esta tabla y la matriz deben coincidir. Decisión del 2026-11-13: ADMIN conserva `tarifas:leer`.
 
 Los roles con acceso global tienen un selector "Míos / Todos". "Revisión" es la lista de viáticos con `estado = PENDIENTE` preaplicado, no un módulo aparte.
 
