@@ -1,6 +1,6 @@
 # Datos iniciales de catálogos
 
-Archivos de datos (no código) que cargan los comandos de seed. Los valores **no se escriben en el código ni en las migraciones** (DP-14, ADR-030).
+Archivos de datos (no código). Los valores **no se escriben en el código ni en las migraciones** (DP-14, ADR-030): la migración de S2-02 (`20261113_1349_catalogos_viaticos_y_gastos`) los lee de aquí.
 
 ## `tarifas_viaticos.csv`
 
@@ -21,4 +21,4 @@ Tarifas oficiales de viáticos en COP, extraídas de `calcularGastos.html` (proy
 
 **Proyecto que exige formato de prestador** (`javaScript.html`): `P-CONEXI-002`. Se configura con `proyectos.exige_formato_prestador = true` cuando se cree el catálogo de proyectos (S2-01).
 
-Lo carga el comando de seed de tarifas de S2-01 (idempotente por ciudad + tipo). Después de la carga inicial, las tarifas se administran desde la app (SUPERADMIN); este archivo no se vuelve a aplicar sobre valores editados.
+Lo carga la migración de S2-02 al crear la tabla (las 44 filas; `created_by = NULL`, `migrado_de` = `clave_legado`). Después de la carga inicial, las tarifas se administran desde la app (SUPERADMIN); este archivo no se vuelve a aplicar sobre valores editados. **No lo edite pensando que cambia las tarifas vigentes:** solo afectaría a una BD nueva.

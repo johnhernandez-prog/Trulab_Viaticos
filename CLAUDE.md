@@ -47,7 +47,7 @@ frontend/src/{app,components/{ui,layout},features/<dominio>,lib,types}
 infra/{docker,db/init}  scripts/etl_appsheet/  docs/
 ```
 
-Dominios: `auth`, `usuarios`, `cargos`, `catalogos` (tablas maestras proyectos, rubros, células y **tarifas de viáticos**; las administra SUPERADMIN), `viaticos` (antes `legalizaciones`; solicitud, trayectos y cálculo tarifario), `gastos`, `pagos`, `reportes`, `indicadores`.
+Dominios: `auth`, `usuarios`, `cargos`, `archivos` (metadatos de S3), `auditoria` (consulta), `catalogos` (tablas maestras proyectos, rubros, células y **tarifas de viáticos**; las administra SUPERADMIN), `viaticos` (antes `legalizaciones`; solicitud, trayectos y cálculo tarifario), `gastos`, `pagos`, `reportes`, `indicadores`.
 
 ## Roles y módulos
 
@@ -124,7 +124,9 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 **S1-11 terminada** (2026-11-13): login dual (usuario/contraseña, Google GIS si hay `VITE_GOOGLE_CLIENT_ID`, acceso de desarrollo solo en `DEV`), olvidé/restablecer/cambiar contraseña (con el cambio obligatorio), `AuthProvider` (recuperación silenciosa, renovación antes de vencer, token en memoria), guardas por sesión y permiso, y AppShell responsivo con menú por permisos (`components/layout/navegacion.ts`). Formularios con React Hook Form + Zod.
 
-**S1-13 terminada** (2026-11-13): semana 1 cerrada. ADMIN conserva `tarifas:leer` (decisión del dueño del producto; F-11 actualizada). **En curso: S2-01/S2-02** (modelo y migración de catálogos, tarifas, viáticos, gastos y archivos).
+**S1-13 terminada** (2026-11-13): semana 1 cerrada. ADMIN conserva `tarifas:leer` (decisión del dueño del producto; F-11 actualizada).
+
+**S2-02 terminada** (2026-11-13): migración `2c36be2a3312` con `proyectos`, `rubros`, `tarifas_viaticos` (seed de 44 filas leído del CSV), `archivos`, `viaticos` (`VT-`, `valor_transferido` generado), `viatico_trayectos`, `viatico_eventos` (solo inserción con trigger), `gastos` y `v_viatico_saldos`; modelos en `app/modules/{catalogos,archivos,viaticos,gastos}/models.py` y enums en `app/core/enums.py`. **Próxima: S2-01 (API de catálogos y tarifas)**, luego S2-03 (RLS).
 
 ## Cómo retomar
 

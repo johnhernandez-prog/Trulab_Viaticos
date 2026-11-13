@@ -62,6 +62,11 @@ class Usuario(ConId, ConMarcasDeTiempo, ConAutores, ConBorradoLogico, ConMigrado
         ForeignKey("cargos.id", ondelete="RESTRICT", use_alter=True), index=True
     )
     activo: Mapped[bool] = mapped_column(server_default=text("true"))
+    # Firma guardada en el perfil, reutilizable en las solicitudes (RN-32). `use_alter`: `archivos`
+    # referencia a `usuarios` (`created_by`).
+    firma_archivo_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("archivos.id", ondelete="RESTRICT", use_alter=True), index=True
+    )
     google_sub: Mapped[str | None] = mapped_column(Text, unique=True)
     ultimo_acceso: Mapped[datetime | None]
 

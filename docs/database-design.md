@@ -138,6 +138,8 @@ Tres tablas con la **misma estructura**, administradas solo por SUPERADMIN (RN-2
 | `sha256` | `TEXT` | `NOT NULL` |
 | `proposito` | `TEXT` | `NOT NULL CHECK (proposito IN ('SOPORTE','ARCHIVO','FIRMA','FORMATO_PRESTADOR'))`. El service valida que el tipo MIME corresponda al propósito (RN-13) |
 
+**Implementado en S2-02** (`app/modules/archivos/models.py`): además, `CHECK` de `tamano_bytes > 0`, `sha256` de 64 hex, `mime_type` con forma `tipo/subtipo` y textos no vacíos. Las filas son **inmutables**: `trulab_app` solo tiene `INSERT` y `SELECT` (reemplazar un soporte crea otra fila; la purga de huérfanos es una tarea futura). `usuarios.firma_archivo_id` (FK `RESTRICT`, con índice) se agregó en la misma migración.
+
 ### 2.5 `tarifas_viaticos` (DP-20 ✅, ADR-030)
 
 Tarifas por **ciudad de destino** y **tipo de vinculación**. Reemplaza las tablas `gastosViaje2025` (empleados) y `prestadores` de `calcularGastos.html`. Administrada solo por SUPERADMIN (RN-24, RF-018).
@@ -157,9 +159,9 @@ Tarifas por **ciudad de destino** y **tipo de vinculación**. Reemplaza las tabl
 | `orden` | `SMALLINT NULL` | Orden en el selector (por defecto, el del formulario original) |
 | `created_at`, `updated_at`, `created_by`, `updated_by`, `migrado_de` | | |
 
-- `UNIQUE (lower(ciudad), es_prestador_servicios)`: una fila por ciudad y tipo (hasta **44** filas en el seed: 22 × 2).
+- `UNIQUE (lower(ciudad), es_prestador_servicios)`: una fila por ciudad y tipo (hasta **44** filas en el seed: 22 × 2). Como la clave legada se repite en los dos tipos, el índice del ETL es `UNIQUE (migrado_de, es_prestador_servicios) WHERE migrado_de IS NOT NULL` (no `migrado_de` solo). `CHECK` de no negatividad por concepto y `ciudad` no vacía.
 - **No se borra:** se desactiva. Cambiar una tarifa **no** altera solicitudes ya creadas: `viatico_trayectos` guarda una instantánea (§2.7).
-- **Seed:** los valores oficiales (entregados por el dueño del producto el 2026-11-12, extraídos de `calcularGastos.html`) están en **`backend/app/modules/catalogos/datos/tarifas_viaticos.csv`** (44 filas; ver el `README.md` de esa carpeta). La ciudad visible usa la grafía en español (`Bogotá`, `Pichindé Valle`) y el identificador del código legado (`Bogota`, `PichindeValle`) va a `migrado_de`. El comando de carga (S2-01) es idempotente (clave: ciudad + tipo). **Los valores no se escriben en el código ni en las migraciones** (DP-14).
+- **Seed:** los valores oficiales (entregados por el dueño del producto el 2026-11-12, extraídos de `calcularGastos.html`) están en **`backend/app/modules/catalogos/datos/tarifas_viaticos.csv`** (44 filas; ver el `README.md` de esa carpeta). La ciudad visible usa la grafía en español (`Bogotá`, `Pichindé Valle`) y el identificador del código legado (`Bogota`, `PichindeValle`) va a `migrado_de`. **Decisión del 2026-11-13 (dueño del producto):** la migración de S2-02 hace el seed inicial **leyendo ese CSV** (las 44 filas, `created_by = NULL` = sistema, `migrado_de` = clave legada). Los valores siguen sin escribirse en el código ni en la migración: la única fuente es el archivo validado (DP-14). Después, las tarifas se administran desde la app; el CSV no se vuelve a aplicar sobre valores editados.
 - **Ciudad = destino de lista cerrada:** la lista de ciudades del selector sale de aquí (filas activas del tipo del viajero). `"Otro"` es una fila más, con su propia tarifa.
 - Cambios auditados: `TARIFA_CREAR`, `TARIFA_EDITAR`, `TARIFA_DESACTIVAR`.
 
@@ -225,6 +227,9 @@ Reemplaza a `legalizaciones`. Un registro recorre la etapa `SOLICITUD` y la `LEG
 - `ck_viaticos__proyecto_exclusivo` (RN-16, ADR-031): `(modalidad = 'CON_SOLICITUD' AND ((proyecto_id IS NOT NULL AND proyecto_otro IS NULL) OR (proyecto_id IS NULL AND proyecto_otro IS NOT NULL))) OR (modalidad = 'LEGALIZACION_DIRECTA' AND proyecto_id IS NULL AND proyecto_otro IS NULL)`. Es la regla "exactamente uno" aplicada solo a la solicitud, porque la legalización directa no tiene proyecto de cabecera (el proyecto va en cada gasto).
 - `ck_viaticos__solicitud_solo_con_solicitud`: si `modalidad = 'LEGALIZACION_DIRECTA'`, entonces `proyecto_id`, `proyecto_otro`, `lider_proyecto`, `presupuesto_solicitado`, `firma_archivo_id`, `formato_adjunto_id`, `solicitud_aprobada_at` y `legalizacion_habilitada_at` son `NULL` y `requiere_tiquete = requiere_gastos_viaje = false`.
 - `ck_viaticos__legalizacion_habilitada`: `etapa = 'LEGALIZACION' AND modalidad = 'CON_SOLICITUD'` implica `legalizacion_habilitada_at IS NOT NULL`.
+- `ck_viaticos__lider_en_solicitud` (S2-02): en `CON_SOLICITUD`, `lider_proyecto` no nulo ni vacío (es un dato de la cabecera que se pide al crear, como el proyecto).
+- Además (S2-02): `motivo_viaje` de 3 a 500 caracteres sin espacios de borde, `colaborador_nombre` no vacío, `valor_asignado >= 0`, `presupuesto_solicitado >= 0` y los `CHECK` de los cuatro enums.
+- `valor_transferido` se declara con la expresión tal como PostgreSQL la normaliza (`CASE WHEN recursos_propios THEN (0)::numeric ELSE valor_asignado END`); así `alembic check` no la ve distinta. Escribirla falla (`cannot update a generated column`).
 - La obligatoriedad completa de la solicitud (trayectos, firma, formato, fecha de nacimiento) es **de servicio** (RN-06), porque la solicitud se guarda como borrador `PENDIENTE` antes de estar completa.
 
 > Reglas de transición (aprobar, habilitar legalización, RN-27) no son `CHECK`: las aplica `transicionar()` (`docs/architecture.md` §3).
@@ -249,6 +254,8 @@ De **1 a 5** tramos por solicitud (RN-30). Solo existen en viáticos `CON_SOLICI
 | `vr_alimentacion`, `otros_gastos`, `trans_interno`, `transporte_aeropuerto`, `transporte_intermunicipal` | `NUMERIC(14,2) NULL` | **Instantánea** de las tarifas usadas (`trans_interno` ya resuelto según `dias_estadia`). Congela el cálculo aunque la tarifa cambie |
 | `subtotal_estadia` | `NUMERIC(14,2) NULL` | `(vr_alimentacion + trans_interno + otros_gastos) × dias_estadia` |
 
+Implementado en S2-02 sin `deleted_at` ni `migrado_de` (el ETL no crea trayectos). `CHECK` adicionales: ciudades no vacías y montos de la instantánea no negativos. `trulab_app` conserva `DELETE` (reemplazo en bloque).
+
 `viaticos.presupuesto_solicitado = Σ(subtotal_estadia + transporte_aeropuerto + transporte_intermunicipal)` de sus trayectos (RN-29). Lo calcula un servicio puro; el cliente no envía importes.
 
 ### 2.8 `gastos`
@@ -268,6 +275,8 @@ De **1 a 5** tramos por solicitud (RN-30). Solo existen en viáticos `CON_SOLICI
 | `archivo_id` | `UUID NULL` FK → `archivos.id` | PDF (RN-13) |
 | `observaciones` | `TEXT NULL` | |
 
+> **Implementado en S2-02:** `soporte_id` y `archivo_id` son `UNIQUE` (un archivo pertenece a un solo gasto) y distintos entre sí; `concepto` no vacío. "No futura" (RN-07) queda en el service: un `CHECK` con `current_date` no es inmutable.
+>
 > **Adjunto mínimo (RN-21):** `soporte_id IS NOT NULL OR archivo_id IS NOT NULL` es obligatorio para Aprobar y liquidar, no para guardar. Lo valida `transicionar()`; la vista expone `gastos_sin_comprobante`.
 
 ### 2.9 `viatico_eventos` (historial, solo inserción)
@@ -286,6 +295,8 @@ Reemplaza a `legalizacion_eventos`.
 | `datos` | `JSONB NULL` | P. ej. `{valor_asignado: {antes, despues}}`, `{presupuesto_solicitado}` |
 | `usuario_id` | `UUID` FK | `NOT NULL` |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+
+**Solo inserción (S2-02):** `trulab_app` tiene solo `INSERT` y `SELECT`, y los triggers `tg_viatico_eventos__solo_insercion` / `__sin_truncate` (función `fn_solo_insercion()`) lo impiden también al dueño del esquema. `CHECK` de `datos` como objeto JSON cuando no es nulo.
 
 ### 2.10 `auditoria` (solo inserción)
 
@@ -357,6 +368,8 @@ v_viatico_saldos(
 -- viaticos v LEFT JOIN gastos g … WHERE v.deleted_at IS NULL GROUP BY v.id
 -- security_invoker = true para respetar el RLS de las tablas base.
 ```
+
+**Implementada en S2-02** con `security_invoker = true`; `trulab_app` solo tiene `SELECT` sobre ella. `total_gastos` y `saldo` salen como `NUMERIC(14,2)`.
 
 `saldo > 0` ⇒ reintegro a la empresa; `saldo < 0` ⇒ reembolso al viajero (RN-02). En `etapa = 'SOLICITUD'` el saldo no es significativo (sin gastos) y la UI no lo muestra.
 
@@ -444,6 +457,8 @@ Los **indicadores** no usan esta vista como base temporal: agrupan `gastos` por 
 | `auditoria` | `(entidad, entidad_id)`, `(created_at)`, `(accion, created_at)` | Consultas y alertas de `LOGIN_FALLIDO` |
 
 Todas las FK llevan índice.
+
+**Privilegios de `trulab_app` (S2-02):** sin `DELETE` en `proyectos`, `rubros`, `tarifas_viaticos`, `viaticos` y `gastos`; solo `INSERT`/`SELECT` en `archivos` y `viatico_eventos`; DML completo en `viatico_trayectos`; solo `SELECT` en `v_viatico_saldos`. Las FK `usuario_id` y `viatico_id` llevan además un índice simple (los compuestos de la tabla son parciales).
 
 ## 6. Estrategia RLS
 

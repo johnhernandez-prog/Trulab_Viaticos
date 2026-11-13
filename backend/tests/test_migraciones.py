@@ -190,3 +190,107 @@ def test_privilegios_de_trulab_app_en_tablas_de_identidad(owner: Connection) -> 
         # Se invalidan con `used_at`, no se borran (S1-07b).
         "tokens_recuperacion_password": "INSERT,SELECT,UPDATE",
     }
+
+
+# --- modelo unificado (S2-02) --------------------------------------------------------------------
+
+
+@requiere_owner
+def test_privilegios_de_trulab_app_en_el_modelo_de_viaticos(owner: Connection) -> None:
+    tablas = (
+        "proyectos",
+        "rubros",
+        "tarifas_viaticos",
+        "archivos",
+        "viaticos",
+        "viatico_trayectos",
+        "viatico_eventos",
+        "gastos",
+        "v_viatico_saldos",
+    )
+    filas = owner.execute(
+        text(
+            "SELECT table_name, string_agg(privilege_type, ',' ORDER BY privilege_type) "
+            "FROM information_schema.role_table_grants "
+            "WHERE grantee = 'trulab_app' AND table_name = ANY(:tablas) "
+            "GROUP BY table_name"
+        ),
+        {"tablas": list(tablas)},
+    ).all()
+
+    assert dict(tuple(f) for f in filas) == {
+        # Se desactivan o se eliminan lógicamente (§8).
+        "proyectos": "INSERT,SELECT,UPDATE",
+        "rubros": "INSERT,SELECT,UPDATE",
+        "tarifas_viaticos": "INSERT,SELECT,UPDATE",
+        "viaticos": "INSERT,SELECT,UPDATE",
+        "gastos": "INSERT,SELECT,UPDATE",
+        # Se reemplazan en bloque mientras la solicitud es editable.
+        "viatico_trayectos": "DELETE,INSERT,SELECT,UPDATE",
+        # Inmutables.
+        "archivos": "INSERT,SELECT",
+        "viatico_eventos": "INSERT,SELECT",
+        "v_viatico_saldos": "SELECT",
+    }
+
+
+@requiere_owner
+@pytest.mark.parametrize(
+    "sentencia",
+    [
+        "UPDATE viatico_eventos SET comentario = 'x' WHERE false",
+        "DELETE FROM viatico_eventos WHERE false",
+        "TRUNCATE viatico_eventos",
+    ],
+)
+def test_trigger_impide_modificar_eventos_al_owner(owner: Connection, sentencia: str) -> None:
+    # `WHERE false`: el trigger de fila no se dispara sin filas; se inserta una antes.
+    usuario_id = owner.execute(
+        text(
+            "INSERT INTO usuarios (nombre_completo, correo, rol) "
+            "VALUES ('Eventos', 'eventos-prueba@trulab.co', 'SUPERADMIN') RETURNING id"
+        )
+    ).scalar_one()
+    viatico_id = owner.execute(
+        text(
+            "INSERT INTO viaticos (modalidad, etapa, usuario_id, motivo_viaje, "
+            "colaborador_nombre, colaborador_es_prestador) "
+            "VALUES ('LEGALIZACION_DIRECTA', 'LEGALIZACION', :u, 'Prueba', 'Eventos', false) "
+            "RETURNING id"
+        ),
+        {"u": usuario_id},
+    ).scalar_one()
+    owner.execute(
+        text(
+            "INSERT INTO viatico_eventos (viatico_id, etapa, accion, usuario_id) "
+            "VALUES (:v, 'LEGALIZACION', 'CREAR', :u)"
+        ),
+        {"v": viatico_id, "u": usuario_id},
+    )
+
+    with pytest.raises(DBAPIError, match="solo inserción"):
+        owner.execute(
+            text(sentencia.replace("WHERE false", "WHERE viatico_id = :v")), {"v": viatico_id}
+        )
+
+
+@requiere_owner
+def test_vista_de_saldos_respeta_el_rls_de_quien_consulta(owner: Connection) -> None:
+    opciones = owner.execute(
+        text("SELECT reloptions FROM pg_class WHERE relname = 'v_viatico_saldos'")
+    ).scalar_one()
+
+    assert "security_invoker=true" in (opciones or [])
+
+
+@requiere_owner
+def test_folio_de_viaticos_usa_su_secuencia_propia(owner: Connection) -> None:
+    duena = owner.execute(
+        text(
+            "SELECT d.refobjid::regclass::text FROM pg_depend d "
+            "JOIN pg_class s ON s.oid = d.objid "
+            "WHERE s.relname = 'seq_folio_viaticos' AND d.deptype = 'a'"
+        )
+    ).scalar_one()
+
+    assert duena == "viaticos"

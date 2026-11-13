@@ -1,17 +1,21 @@
 """Fábricas mínimas para las pruebas de BD (siempre dentro del fixture `sesion`)."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.enums import Rol
+from app.core.enums import Etapa, Modalidad, PropositoArchivo, Rol
 from app.core.security import emitir_access_token
+from app.modules.archivos.models import Archivo
 from app.modules.auth.models import Sesion
 from app.modules.cargos.models import Cargo
-from app.modules.catalogos.models import Celula
+from app.modules.catalogos.models import Celula, Proyecto, Rubro
+from app.modules.gastos.models import Gasto
 from app.modules.usuarios.models import Usuario
+from app.modules.viaticos.models import Viatico
 
 # Hash Argon2id con formato PHC válido pero ficticio: las pruebas de modelo no necesitan uno real
 # (el hashing llega en S1-08) y así no pagan el costo de Argon2.
@@ -82,3 +86,80 @@ def bearer(session: Session, usuario: Usuario) -> dict[str, str]:
         ttl=timedelta(minutes=5),
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+# --- Catálogos, archivos, viáticos y gastos (S2-02) ---------------------------------------------
+
+
+def crear_proyecto(session: Session, **campos: object) -> Proyecto:
+    valores: dict[str, object] = {"nombre": f"Proyecto {uuid.uuid4().hex[:8]}"}
+    valores.update(campos)
+    proyecto = Proyecto(**valores)
+    session.add(proyecto)
+    session.flush()
+    return proyecto
+
+
+def crear_rubro(session: Session, nombre: str | None = None) -> Rubro:
+    rubro = Rubro(nombre=nombre or f"Rubro {uuid.uuid4().hex[:8]}")
+    session.add(rubro)
+    session.flush()
+    return rubro
+
+
+def crear_archivo(session: Session, **campos: object) -> Archivo:
+    valores: dict[str, object] = {
+        "storage_key": f"pruebas/{uuid.uuid4()}",
+        "nombre_original": "factura.jpg",
+        "mime_type": "image/jpeg",
+        "tamano_bytes": 1024,
+        "sha256": uuid.uuid4().hex * 2,
+        "proposito": PropositoArchivo.SOPORTE,
+    }
+    valores.update(campos)
+    archivo = Archivo(**valores)
+    session.add(archivo)
+    session.flush()
+    return archivo
+
+
+def crear_viatico(
+    session: Session,
+    usuario: Usuario | None = None,
+    modalidad: Modalidad = Modalidad.LEGALIZACION_DIRECTA,
+    **campos: object,
+) -> Viatico:
+    """Viático mínimo válido para su modalidad (instantánea del colaborador incluida)."""
+    usuario = usuario or crear_usuario(session)
+    valores: dict[str, object] = {
+        "modalidad": modalidad,
+        "etapa": Etapa.SOLICITUD if modalidad == Modalidad.CON_SOLICITUD else Etapa.LEGALIZACION,
+        "usuario_id": usuario.id,
+        "motivo_viaje": "Taller de campo",
+        "colaborador_nombre": usuario.nombre_completo,
+        "colaborador_es_prestador": usuario.es_prestador_servicios,
+    }
+    if modalidad == Modalidad.CON_SOLICITUD:
+        valores.update(proyecto_otro="Proyecto de prueba", lider_proyecto="María Gómez")
+    valores.update(campos)
+    viatico = Viatico(**valores)
+    session.add(viatico)
+    session.flush()
+    return viatico
+
+
+def crear_gasto(session: Session, viatico: Viatico, **campos: object) -> Gasto:
+    valores: dict[str, object] = {
+        "viatico_id": viatico.id,
+        "fecha_factura": date(2026, 11, 5),
+        "concepto": "Almuerzo",
+        "valor": Decimal("50000"),
+        "proyecto_otro": "Proyecto de prueba",
+    }
+    valores.update(campos)
+    if "rubro_id" not in valores:
+        valores["rubro_id"] = crear_rubro(session).id
+    gasto = Gasto(**valores)
+    session.add(gasto)
+    session.flush()
+    return gasto

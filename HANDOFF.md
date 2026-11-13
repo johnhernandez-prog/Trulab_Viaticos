@@ -8,12 +8,27 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Semana 1 cerrada (gate cumplido el 2026-11-13)**; empieza la **semana 2** (F4/F5). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-01** (modelo) y **S2-02** (migración) en curso (S1-12 pasa a la semana 5) |
+| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-02 ✅** (migración del modelo unificado, con el seed de tarifas de S2-01); **próxima: S2-01 (API de catálogos y tarifas)** y S2-03 (RLS) (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
 | Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S2-01 (modelo) y S2-02 · Migración del modelo unificado.** Migración `2c36be2a3312` (`20261113_1349_catalogos_viaticos_y_gastos`) sobre `f7a1a890a1d3`.
+
+| Pieza | Qué quedó |
+| :--- | :--- |
+| Catálogos | `proyectos` (`codigo` único, `exige_formato_prestador`) y `rubros`; sin `DELETE` para la app |
+| Tarifas | `tarifas_viaticos` con **seed de las 44 filas leído del CSV** (decisión del dueño del producto: en la migración, no en un comando); único por `(lower(ciudad), tipo)` y `(migrado_de, tipo)` |
+| Archivos | `archivos` inmutables (solo `INSERT`/`SELECT`), `CHECK` de propósito, 10 MB, SHA-256 y MIME; `usuarios.firma_archivo_id` |
+| Viáticos | Folio `VT-` (secuencia propia), `valor_transferido` generado, 15 `CHECK` (modalidad/etapa, proyecto exclusivo, líder, solicitud vacía en directa, legalización habilitada, RN-03, recursos propios) |
+| Trayectos y eventos | `viatico_trayectos` 1–5 con instantánea tarifaria (RN-30); `viatico_eventos` solo inserción también para el dueño (trigger) |
+| Gastos y saldo | `gastos` (proyecto híbrido, soporte/archivo únicos y distintos) y vista `v_viatico_saldos` (`security_invoker`, solo `SELECT`) |
+
+Verificación: ida y vuelta (`upgrade` → `downgrade -1` → `upgrade`), `alembic check` sin diferencias ni avisos, **583 pruebas** en `migrate` (72 nuevas de modelo y de privilegios) y 568 + 15 omitidas en `api`, ruff, mypy strict y pre-commit en verde. Sin cambios en la API: los tipos TS no cambian.
+
+Ajustes de diseño registrados en `docs/database-design.md` (S2-01): `CHECK` nuevo `ck_viaticos__lider_en_solicitud`; índice ETL de tarifas por `(migrado_de, tipo)`; `archivos` inmutables; trayectos sin `migrado_de`; `soporte_id`/`archivo_id` únicos; "fecha no futura" solo en el service. **Pendiente de datos:** proyectos y rubros iniciales (hoja `PROYECTOS` y exportación de AppSheet, P-2/P-7), incluido `P-CONEXI-002` con `exige_formato_prestador = true`.
 
 **2026-11-13 · S1-13 · Cierre de la semana 1.** Gate cumplido: los 9 criterios de aceptación de `SPRINTS.md` están marcados (el de Google, probado con un verificador falso; el login real espera P-3). Commits en `feat/f1-estructura-monorepo`: `d16ef75` (S1-09), `6fa49ef` (S1-10), `8b81bb9` (S1-11). Siguen pendientes, sin bloquear: push y primera CI en GitHub, OAuth Client ID (P-3), AWS/SES (P-6), hoja `PROYECTOS` (P-7) y S1-12 (semana 5).
 
@@ -420,7 +435,7 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-13** · Cierre de la semana 1 (0,5 h; skill `claude-mem:handoff`): marcar los criterios de aceptación y el gate de la semana 1 en `SPRINTS.md`, actualizar `HANDOFF.md` y `CLAUDE.md`. Después, **semana 2** desde **S2-01** (catálogos y tarifas; depende de P-7, tarifas validadas).
+**S2-01 (resto)** · API de catálogos y tarifas (skills `agent-skills:api-and-interface-design`, `agent-skills:test-driven-development`): `GET /catalogos` (activos, con `ciudades` según el tipo de vinculación), CRUD de `/catalogos/{tipo}` y `/catalogos/tarifas-viaticos` solo SUPERADMIN (`catalogos:gestionar`, `tarifas:gestionar`; lectura `tarifas:leer`), desactivar/activar sin `DELETE`, auditoría `CATALOGO_*` y `TARIFA_*` (agregar `TARIFA_CREAR/EDITAR/DESACTIVAR` a `AccionAuditoria`). Luego **S2-03** (RLS) y **S2-04** (cálculo tarifario).
 
 S1-12 (UI de cargos y usuarios) queda para la semana 5; mientras tanto, ADMIN puede operar por Swagger.
 
