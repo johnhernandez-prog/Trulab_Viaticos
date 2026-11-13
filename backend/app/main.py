@@ -14,6 +14,8 @@ from app.modules.auth import router as auth
 from app.modules.cargos import router as cargos
 from app.modules.catalogos import router as catalogos
 from app.modules.gastos import router as gastos
+from app.modules.indicadores import router as indicadores
+from app.modules.pagos import router as pagos
 from app.modules.usuarios import router as usuarios
 from app.modules.viaticos import router as viaticos
 
@@ -51,6 +53,8 @@ def create_app() -> FastAPI:
     app.include_router(catalogos.router, prefix=API_PREFIX)
     app.include_router(viaticos.router, prefix=API_PREFIX)
     app.include_router(gastos.router, prefix=API_PREFIX)
+    app.include_router(pagos.router, prefix=API_PREFIX)
+    app.include_router(indicadores.router, prefix=API_PREFIX)
     app.include_router(archivos.router, prefix=API_PREFIX)
     app.include_router(archivos.router_firma, prefix=API_PREFIX)
     app.include_router(auditoria.router, prefix=API_PREFIX)

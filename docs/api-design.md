@@ -174,7 +174,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | POST | `/viaticos/{id}/devolver` | **A S** | `PENDIENTE`/`APROBADO` → `PENDIENTE` si `estado_financiero` no es `PAGADO` ni `PROCESADO` (RN-20); `{comentario}` obligatorio; RN-27 igual que aprobar |
 | POST | `/viaticos/{id}/gestionar-tiquetes` | **A S** | `{comentario?, referencia?}`; solo `CON_SOLICITUD` con `requiere_tiquete`, etapa `SOLICITUD` y `estado = APROBADO` (si no, `409 TRANSICION_INVALIDA`); RN-27; repetible; evento `GESTIONAR_TIQUETES` (S-10) |
 | PATCH | `/viaticos/{id}/valor-asignado` | **F S** | `{valor_asignado (>= 0), comentario?}`. Exige `estado = APROBADO`, sin `recursos_propios` y sin liquidar (`409 TRANSICION_INVALIDA`); RN-27. La BD recalcula `valor_transferido` (RN-14); evento `EDITAR_VALOR_ASIGNADO` con antes/después y `presupuesto_solicitado` como referencia. ADMIN y VIAJERO → 403 |
-| POST | `/viaticos/{id}/estado-financiero` | **F S** | `{estado_financiero, comentario?}`. Solo hacia adelante y con `estado = APROBADO`. `TRANSFERIDO` exige `valor_asignado > 0` y sin recursos propios; `PAGADO`/`PROCESADO` exigen RN-03 (etapa `LEGALIZACION`, gastos con comprobante). Registra `CAMBIAR_ESTADO_FINANCIERO` y, al liquidar, `LIQUIDAR` con el sentido (`REINTEGRO` / `REEMBOLSO` / `SIN_SALDO`) |
+| POST | `/viaticos/{id}/estado-financiero` | **F S** | `{estado_financiero, comentario?}`. Solo hacia adelante y con `estado = APROBADO`. `TRANSFERIDO` exige `valor_asignado > 0` y sin recursos propios; `PAGADO`/`PROCESADO` exigen RN-03 (etapa `LEGALIZACION`, gastos con comprobante). Registra `CAMBIAR_ESTADO_FINANCIERO` y, al liquidar, `LIQUIDAR` con el sentido (`REINTEGRO` / `REEMBOLSO` / `SALDADO`) |
 | POST | `/viaticos/{id}/habilitar-legalizacion` | dueño, S | Solo `CON_SOLICITUD`, etapa `SOLICITUD`, `estado = APROBADO` y, si `requiere_gastos_viaje`, `estado_financiero = TRANSFERIDO` (RN-28); si no, `409 LEGALIZACION_NO_HABILITABLE`. Pasa a etapa `LEGALIZACION`, `estado = PENDIENTE`, conserva `estado_financiero` y `valor_asignado` (S-12) |
 | GET | `/viaticos/{id}/eventos` | dueño, F A S | Historial de las tres dimensiones. Por ahora va embebido en `GET /viaticos/{id}` (`eventos[]`); la ruta propia queda para cuando el historial crezca |
 | GET | `/viaticos/{id}/pdf-solicitud` | dueño, F A S | `application/pdf` con la firma incrustada. Solo `CON_SOLICITUD` (`409 MODALIDAD_INVALIDA` si es directa). Sin firma sale marcado "SIN FIRMA — borrador". `Content-Disposition: attachment; filename="VT-000123-solicitud.pdf"` |
@@ -220,24 +220,59 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 - **Adjuntos:** el archivo debe existir y haberlo subido quien registra el gasto (si no, `422 VALOR_NO_PERMITIDO`, sin revelar si existe); `soporte_id` con `proposito = SOPORTE` (imagen) y `archivo_id` con `proposito = ARCHIVO` (PDF); cualquier otro → `415 TIPO_ARCHIVO_NO_PERMITIDO` (RN-13). Soporte y archivo distintos (`422`). Un archivo pertenece a **un solo gasto**, aunque ese gasto se haya eliminado (lo exige el `UNIQUE` de la BD y así el gasto eliminado conserva su comprobante) → `409 EN_USO`.
 - El contenido de un adjunto se ve con `GET /archivos/{id}/url` (§5.9).
 
-### 5.6 Pagos (modelo de lectura)
+### 5.6 Pagos: bandeja de tesorería (S2-09)
 
 | Método | Ruta | Roles | Notas |
 | :--- | :--- | :--- | :--- |
-| GET | `/pagos` | F A S (A solo lectura) | Filas de `v_viatico_saldos`. Filtros: `etapa` (por defecto incluye solicitudes `APROBADO` por desembolsar y legalizaciones `APROBADO`), `estado`, `estado_financiero` (por defecto `PENDIENTE,TRANSFERIDO`), `modalidad`, `saldo` (`negativo`/`positivo`/`cero`), `recursos_propios`, `usuario_id`, `proyecto_id`, `desde`, `hasta`; orden por `saldo`, `fecha_legalizacion` o `folio`. Cada fila trae `presupuesto_solicitado` como referencia |
-| GET | `/pagos/resumen` | F A S | Totales del filtro: transferido, gastado, saldo a reembolsar y a reintegrar |
+| GET | `/pagos` | F A S (`pagos:leer`; A solo lectura, DP-18) | Bandeja paginada (`page`, `size`) |
+| GET | `/pagos/resumen` | F A S | KPIs de tesorería |
 
-El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
+El cambio de estado financiero sigue siendo `POST /viaticos/{id}/estado-financiero` (§5.4).
 
-### 5.7 Indicadores (DP-16 ✅: fecha de factura)
+**Universo** (siempre `estado = APROBADO`): solicitudes (`etapa = SOLICITUD`) con `requiere_gastos_viaje` (hay anticipo que transferir) y legalizaciones (`etapa = LEGALIZACION`). Un viático `RECHAZADO`, sin aprobar o eliminado nunca aparece.
 
-`desde`/`hasta` se aplican **siempre** como `gastos.fecha_factura BETWEEN desde AND hasta` (ADR-024).
+**`GET /pagos`**
+
+- `bandeja` (por defecto `todos`): `pendientes_desembolso` (solicitud con `estado_financiero = PENDIENTE`), `pendientes_liquidacion` (legalización `PENDIENTE` o `TRANSFERIDO`), `historico` (solicitud ya `TRANSFERIDO` y legalización `PAGADO`/`PROCESADO`) o `todos`. Valor distinto → `422`.
+- Otros filtros: `estado_financiero`, `proyecto_id` (el de la solicitud **o** el de cualquiera de sus gastos activos; los "Otro" no entran, S-15), `usuario_id`, `desde`/`hasta` (sobre `fecha_legalizacion`, inclusivos; `desde > hasta` → `422`), `q` (folio, motivo o nombre del viajero) y `sort` ∈ `fecha_legalizacion`, `folio`, `saldo` (con `-` para descendente; por defecto `-fecha_legalizacion`).
+- Cada fila: `id`, `folio`, `usuario {id, nombre}`, `modalidad`, `etapa`, `estado`, `estado_financiero`, `bandeja` (en cuál de las tres está), `motivo_viaje`, `fecha_legalizacion`, `recursos_propios`, `presupuesto_solicitado` (referencia, `null` si no hay), `valor_asignado`, `valor_transferido`, `total_gastos`, **`saldo`** y **`tipo_liquidacion`** (`REINTEGRO` si `saldo > 0`, `REEMBOLSO` si `< 0`, `SALDADO` si `0`). El saldo sale de `v_viatico_saldos` y **solo se informa en legalización**: en una solicitud `saldo` y `tipo_liquidacion` son `null` (RN-02).
+- `acciones_permitidas`: solo las de tesorería (`registrar_valor_asignado`, `cambiar_estado_financiero`) y `destinos_financieros` (a qué estado financiero se puede pasar ahora). Vacías para ADMIN (RN-26) y sobre un viático propio (RN-27, salvo SUPERADMIN).
+
+**`GET /pagos/resumen`** — filtros `proyecto_id`, `usuario_id`, `desde`, `hasta` (los de la lista, sin `bandeja`). Dinero siempre como string de 2 decimales (también los ceros):
+
+| Campo | Qué es |
+| :--- | :--- |
+| `pendientes_desembolso` | `{cantidad, monto_asignado, monto_presupuestado}` de las solicitudes aprobadas sin transferir (lo ya fijado por Financiero y lo sugerido por la tabla tarifaria) |
+| `pendientes_liquidacion` | `{cantidad, monto_gastos, monto_transferido}` de las legalizaciones aprobadas sin pagar |
+| `total_transferido` | Σ `valor_transferido` de todo viático con `estado_financiero` ∈ {`TRANSFERIDO`, `PAGADO`, `PROCESADO`}: el dinero que ya salió, esté o no aprobada su legalización |
+| `total_legalizado` | Σ gastos de las legalizaciones aprobadas |
+| `reintegros_pendientes` | `{cantidad, monto}` de las legalizaciones pendientes de liquidar con `saldo > 0` (el viajero devuelve) |
+| `reembolsos_pendientes` | `{cantidad, monto}` con `saldo < 0`; el monto es la magnitud (positiva) que la empresa debe |
+
+### 5.7 Indicadores (S2-09; DP-16 ✅: fecha de factura)
 
 | Método | Ruta | Roles | Respuesta |
 | :--- | :--- | :--- | :--- |
-| GET | `/indicadores/consumo-por-proyecto?desde&hasta` | F A S | `[{proyecto_id, proyecto, en_catalogo, total_gastos, cantidad_gastos}]`. Los gastos con "Otro" se agrupan por nombre normalizado, con `proyecto_id = null` y `en_catalogo = false` |
-| GET | `/indicadores/estados?desde&hasta&proyecto_id` | F A S | `[{estado, cantidad}]` (estado operativo; S-07) |
-| GET | `/indicadores/kpis?desde&hasta` | F A S | `{total_transferido, total_gastos, saldo_por_reembolsar, saldo_por_reintegrar, pendientes_aprobacion, pendientes_pago}` (opcional MVP) |
+| GET | `/indicadores/resumen` | F A S (`indicadores:leer`) | Totales y desgloses (abajo) |
+| GET | `/indicadores/exportar.csv` | F A S | Detalle de gastos en CSV, en streaming |
+
+> Reemplaza a los tres endpoints previstos (`consumo-por-proyecto`, `estados`, `kpis`): sus datos son `por_proyecto`, `por_estado` y `totales` del resumen, en una sola consulta para el dashboard.
+
+**Filtros** (los dos endpoints): `desde`/`hasta` (**siempre** sobre `gastos.fecha_factura`, inclusivos, RN-07/RN-18; `desde > hasta` → `422` con `errors[].field = hasta`), `proyecto_id` (solo catálogo; los "Otro" no entran, S-15), `rubro_id`, `celula_id` (la célula actual del viajero), `usuario_id`, `modalidad`.
+
+**Dos bases, explícitas:**
+
+1. **Dinero** (`totales`, `por_proyecto`, `por_rubro`, `por_celula`, `por_mes` y el CSV): los gastos activos de las **legalizaciones aprobadas**. `total_solicitado` y `total_transferido` son los de los viáticos a los que pertenecen esos gastos; con un rango de fechas, un viático cuenta entero aunque solo parte de sus gastos caiga en él. `saldo_neto = total_transferido − total_gastado`.
+2. **Estados** (`por_estado`, `por_estado_financiero`): viáticos de cualquier estado (si no, todo saldría `APROBADO`). Con filtros de gasto (fechas, proyecto, rubro) cuentan solo los que tienen al menos un gasto que los cumpla (S-07). Todos los valores del enum aparecen, también con cero.
+
+**Respuesta de `/indicadores/resumen`:** `totales {total_solicitado, total_transferido, total_gastado, saldo_neto, cantidad_viaticos, cantidad_gastos}`; `por_proyecto [{proyecto_id, proyecto, es_fuera_catalogo, total_gastado, cantidad_gastos}]` (los del catálogo por id; los escritos con "Otro" por **nombre normalizado** `lower(btrim())`, con `proyecto_id = null` y `es_fuera_catalogo = true`; un "Otro" con el nombre de un proyecto del catálogo **no** se mezcla con él); `por_rubro`; `por_celula` (los sin célula como "Sin célula"); `por_mes [{mes: "AAAA-MM", …}]` (ascendente, solo meses con gastos); `por_estado` y `por_estado_financiero` (`[{estado, cantidad}]`). Los desgloses van de mayor a menor gasto.
+
+**`GET /indicadores/exportar.csv`** (`separador` ∈ `;` (por defecto) o `,`):
+
+- `text/csv; charset=utf-8` con **BOM UTF-8** (Excel en Windows abre bien las tildes y las eñes), `Content-Disposition: attachment; filename="indicadores-AAAAMMDD.csv"` y `Cache-Control: private, no-store` (lleva nombres y montos). El `;` es el separador de listas de Excel con configuración regional de Colombia; con `,` abriría todo en una columna. Los números salen con punto decimal (`45000.50`).
+- **Una fila por gasto** (base de dinero), ordenada por fecha de factura, folio y id: `folio, modalidad, estado, estado_financiero, viajero, celula, motivo_viaje, fecha_factura, proyecto, fuera_de_catalogo (SI/NO), rubro, empresa, cc_nit, concepto, valor, con_comprobante (SI/NO)`. Sin cédula ni fecha de nacimiento (RNF-09).
+- **Streaming real:** FastAPI cierra la sesión de la petición antes de enviar el cuerpo, así que el generador abre **su propia sesión** con el contexto de RLS de quien exporta (`app/core/db.py::sesion_independiente`) y lee con un cursor de servidor en bloques de 200 filas; no carga todo en memoria. El rango se valida antes de empezar (con el cuerpo en camino ya no se puede responder `422`).
+- **Inyección de fórmulas (OWASP):** todo texto libre (viajero, motivo, proyecto, rubro, empresa, CC/NIT, concepto) que Excel tomaría por una fórmula —empieza por `=`, `+`, `-` o `@`, también tras espacios, o por tabulador o retorno— se antepone con `'`. Números, fechas y SI/NO los formatea el servidor y no se tocan; comillas, saltos de línea y separadores dentro de un texto los escapa el escritor CSV.
 
 ### 5.8 Auditoría (SUPERADMIN, post-MVP en la UI)
 

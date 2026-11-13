@@ -400,7 +400,7 @@ def test_pagar_exige_comprobantes_rn03(api: TestClient, sesion: Session) -> None
     [
         ("100000", ("30000", "20000"), "50000.00", "REINTEGRO"),
         ("100000", ("80000", "40000"), "-20000.00", "REEMBOLSO"),
-        ("50000", ("50000",), "0.00", "SIN_SALDO"),
+        ("50000", ("50000",), "0.00", "SALDADO"),
     ],
 )
 def test_liquidar_registra_el_sentido_del_saldo(
@@ -597,7 +597,7 @@ def test_flujo_completo_con_solicitud(api: TestClient, sesion: Session) -> None:
 
 @pytest.mark.parametrize(
     ("saldo", "sentido"),
-    [(Decimal("1"), "REINTEGRO"), (Decimal("-0.01"), "REEMBOLSO"), (Decimal("0"), "SIN_SALDO")],
+    [(Decimal("1"), "REINTEGRO"), (Decimal("-0.01"), "REEMBOLSO"), (Decimal("0"), "SALDADO")],
 )
 def test_sentido_liquidacion(saldo: Decimal, sentido: str) -> None:
     assert sentido_liquidacion(saldo) == sentido

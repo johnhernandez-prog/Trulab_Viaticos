@@ -75,6 +75,14 @@ class AccionViatico(StrEnum):
     ELIMINAR_GASTO = "ELIMINAR_GASTO"
 
 
+class TipoLiquidacion(StrEnum):
+    """Sentido del saldo de una legalización (RN-02): lo usan `/pagos` y el evento `LIQUIDAR`."""
+
+    REINTEGRO = "REINTEGRO"  # saldo > 0: el viajero devuelve a la empresa
+    REEMBOLSO = "REEMBOLSO"  # saldo < 0: la empresa paga al viajero
+    SALDADO = "SALDADO"  # saldo = 0
+
+
 class DimensionEvento(StrEnum):
     OPERATIVO = "OPERATIVO"
     FINANCIERO = "FINANCIERO"

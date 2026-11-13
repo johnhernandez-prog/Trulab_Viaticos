@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Iterator
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -9,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
-from app.core.db import fijar_contexto_rls, get_db, get_engine
+from app.core.db import fijar_contexto_rls, get_db, get_engine, get_fabrica_sesion
 from app.core.enums import Rol
 from app.core.mail import Correo, get_mailer
 from app.main import create_app
@@ -90,6 +91,11 @@ def api(
         return tokens_google[id_token]
 
     app.dependency_overrides[get_db] = lambda: sesion
+    # Las respuestas en streaming abren su propia sesión en producción; en pruebas reutilizan la
+    # sesión revertida (con su contexto de RLS ya fijado por la autenticación de la petición).
+    app.dependency_overrides[get_fabrica_sesion] = lambda: lambda _usuario_id, _rol: nullcontext(
+        sesion
+    )
     app.dependency_overrides[get_mailer] = lambda: buzon
     app.dependency_overrides[get_verificador_google] = lambda: verificador
     rate_limit.contador.reiniciar()

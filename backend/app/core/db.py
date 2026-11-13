@@ -8,7 +8,8 @@ devuelta al pool.
 """
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from functools import lru_cache
 from typing import Any
 
@@ -64,6 +65,29 @@ def get_db() -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+@contextmanager
+def sesion_independiente(usuario_id: uuid.UUID, rol: Rol | str) -> Iterator[Session]:
+    """Sesión propia, con el contexto de RLS de quien la pide, para respuestas en *streaming*.
+
+    FastAPI (0.115) cierra la sesión de `get_db` **antes** de enviar el cuerpo de una respuesta, así
+    que un generador no puede usarla. Esta se abre y se cierra dentro del generador.
+    """
+    session = _session_factory()()
+    try:
+        fijar_contexto_rls(session, usuario_id, rol)
+        yield session
+    finally:
+        session.close()
+
+
+FabricaSesion = Callable[[uuid.UUID, Rol | str], AbstractContextManager[Session]]
+
+
+def get_fabrica_sesion() -> FabricaSesion:
+    """Dependencia de FastAPI (las pruebas la reemplazan con la sesión revertida)."""
+    return sesion_independiente
 
 
 def bd_disponible() -> bool:

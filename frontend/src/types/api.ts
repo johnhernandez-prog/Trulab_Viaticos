@@ -681,6 +681,74 @@ export interface paths {
         patch: operations["editar_api_v1_viaticos__viatico_id__gastos__gasto_id__patch"];
         trace?: never;
     };
+    "/api/v1/pagos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja de tesorería: solicitudes por desembolsar y legalizaciones por liquidar */
+        get: operations["listar_api_v1_pagos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pagos/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** KPIs de tesorería de lo que cumple los filtros */
+        get: operations["resumen_api_v1_pagos_resumen_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/indicadores/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Totales y desgloses por proyecto, rubro, célula, mes y estado (F, A, S) */
+        get: operations["resumen_api_v1_indicadores_resumen_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/indicadores/exportar.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de gastos en CSV (UTF-8 con BOM, en streaming; F, A, S) */
+        get: operations["exportar_api_v1_indicadores_exportar_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/archivos": {
         parameters: {
             query?: never;
@@ -881,6 +949,18 @@ export interface components {
             /** Nombre */
             nombre: string;
         };
+        /**
+         * BandejaFila
+         * @description Bandeja concreta de una fila (nunca `todos`).
+         * @enum {string}
+         */
+        BandejaFila: "pendientes_desembolso" | "pendientes_liquidacion" | "historico";
+        /**
+         * BandejaPagos
+         * @description Qué le toca hacer a tesorería con un viático aprobado.
+         * @enum {string}
+         */
+        BandejaPagos: "pendientes_desembolso" | "pendientes_liquidacion" | "historico" | "todos";
         /** Body_subir_api_v1_archivos_post */
         Body_subir_api_v1_archivos_post: {
             /**
@@ -1287,6 +1367,81 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IndicadoresResumen */
+        IndicadoresResumen: {
+            totales: components["schemas"]["Totales"];
+            /** Por Proyecto */
+            por_proyecto: components["schemas"]["ItemProyecto"][];
+            /** Por Rubro */
+            por_rubro: components["schemas"]["ItemRubro"][];
+            /** Por Celula */
+            por_celula: components["schemas"]["ItemCelula"][];
+            /** Por Mes */
+            por_mes: components["schemas"]["ItemMes"][];
+            /** Por Estado */
+            por_estado: components["schemas"]["ItemEstadoOperativo"][];
+            /** Por Estado Financiero */
+            por_estado_financiero: components["schemas"]["ItemEstadoFinanciero"][];
+        };
+        /** ItemCelula */
+        ItemCelula: {
+            /** Celula Id */
+            celula_id: string | null;
+            /** Celula */
+            celula: string;
+            /** Total Gastado */
+            total_gastado: string;
+            /** Cantidad Gastos */
+            cantidad_gastos: number;
+        };
+        /** ItemEstadoFinanciero */
+        ItemEstadoFinanciero: {
+            estado: components["schemas"]["EstadoFinanciero"];
+            /** Cantidad */
+            cantidad: number;
+        };
+        /** ItemEstadoOperativo */
+        ItemEstadoOperativo: {
+            estado: components["schemas"]["EstadoOperativo"];
+            /** Cantidad */
+            cantidad: number;
+        };
+        /** ItemMes */
+        ItemMes: {
+            /** Mes */
+            mes: string;
+            /** Total Gastado */
+            total_gastado: string;
+            /** Cantidad Gastos */
+            cantidad_gastos: number;
+        };
+        /** ItemProyecto */
+        ItemProyecto: {
+            /** Proyecto Id */
+            proyecto_id: string | null;
+            /** Proyecto */
+            proyecto: string;
+            /** Es Fuera Catalogo */
+            es_fuera_catalogo: boolean;
+            /** Total Gastado */
+            total_gastado: string;
+            /** Cantidad Gastos */
+            cantidad_gastos: number;
+        };
+        /** ItemRubro */
+        ItemRubro: {
+            /**
+             * Rubro Id
+             * Format: uuid
+             */
+            rubro_id: string;
+            /** Rubro */
+            rubro: string;
+            /** Total Gastado */
+            total_gastado: string;
+            /** Cantidad Gastos */
+            cantidad_gastos: number;
+        };
         /** LoginEntrada */
         LoginEntrada: {
             /** Username */
@@ -1332,6 +1487,17 @@ export interface components {
             /** Size */
             size: number;
         };
+        /** Pagina[PagoFila] */
+        Pagina_PagoFila_: {
+            /** Items */
+            items: components["schemas"]["PagoFila"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
         /** Pagina[TarifaSalida] */
         Pagina_TarifaSalida_: {
             /** Items */
@@ -1364,6 +1530,57 @@ export interface components {
             page: number;
             /** Size */
             size: number;
+        };
+        /** PagoFila */
+        PagoFila: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Folio */
+            folio: string;
+            usuario: components["schemas"]["Referencia"];
+            modalidad: components["schemas"]["Modalidad"];
+            etapa: components["schemas"]["Etapa"];
+            estado: components["schemas"]["EstadoOperativo"];
+            estado_financiero: components["schemas"]["EstadoFinanciero"];
+            bandeja: components["schemas"]["BandejaFila"];
+            /** Motivo Viaje */
+            motivo_viaje: string;
+            /**
+             * Fecha Legalizacion
+             * Format: date
+             */
+            fecha_legalizacion: string;
+            /** Recursos Propios */
+            recursos_propios: boolean;
+            /** Presupuesto Solicitado */
+            presupuesto_solicitado: string | null;
+            /** Valor Asignado */
+            valor_asignado: string;
+            /** Valor Transferido */
+            valor_transferido: string;
+            /** Total Gastos */
+            total_gastos: string;
+            /** Saldo */
+            saldo: string | null;
+            tipo_liquidacion: components["schemas"]["TipoLiquidacion"] | null;
+            /** Acciones Permitidas */
+            acciones_permitidas: string[];
+            /** Destinos Financieros */
+            destinos_financieros: components["schemas"]["EstadoFinanciero"][];
+        };
+        /** PagosResumen */
+        PagosResumen: {
+            pendientes_desembolso: components["schemas"]["ResumenDesembolso"];
+            pendientes_liquidacion: components["schemas"]["ResumenLiquidacion"];
+            /** Total Transferido */
+            total_transferido: string;
+            /** Total Legalizado */
+            total_legalizado: string;
+            reintegros_pendientes: components["schemas"]["ResumenSaldo"];
+            reembolsos_pendientes: components["schemas"]["ResumenSaldo"];
         };
         /**
          * Permiso
@@ -1402,6 +1619,31 @@ export interface components {
             token: string;
             /** Nueva Password */
             nueva_password: string;
+        };
+        /** ResumenDesembolso */
+        ResumenDesembolso: {
+            /** Cantidad */
+            cantidad: number;
+            /** Monto Asignado */
+            monto_asignado: string;
+            /** Monto Presupuestado */
+            monto_presupuestado: string;
+        };
+        /** ResumenLiquidacion */
+        ResumenLiquidacion: {
+            /** Cantidad */
+            cantidad: number;
+            /** Monto Gastos */
+            monto_gastos: string;
+            /** Monto Transferido */
+            monto_transferido: string;
+        };
+        /** ResumenSaldo */
+        ResumenSaldo: {
+            /** Cantidad */
+            cantidad: number;
+            /** Monto */
+            monto: string;
         };
         /**
          * Rol
@@ -1537,6 +1779,27 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * TipoLiquidacion
+         * @description Sentido del saldo de una legalización (RN-02): lo usan `/pagos` y el evento `LIQUIDAR`.
+         * @enum {string}
+         */
+        TipoLiquidacion: "REINTEGRO" | "REEMBOLSO" | "SALDADO";
+        /** Totales */
+        Totales: {
+            /** Total Solicitado */
+            total_solicitado: string;
+            /** Total Transferido */
+            total_transferido: string;
+            /** Total Gastado */
+            total_gastado: string;
+            /** Saldo Neto */
+            saldo_neto: string;
+            /** Cantidad Viaticos */
+            cantidad_viaticos: number;
+            /** Cantidad Gastos */
+            cantidad_gastos: number;
         };
         /** TrayectoEntradaSchema */
         TrayectoEntradaSchema: {
@@ -3641,6 +3904,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GastoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_api_v1_pagos_get: {
+        parameters: {
+            query?: {
+                bandeja?: components["schemas"]["BandejaPagos"];
+                estado_financiero?: components["schemas"]["EstadoFinanciero"] | null;
+                proyecto_id?: string | null;
+                usuario_id?: string | null;
+                desde?: string | null;
+                hasta?: string | null;
+                /** @description Folio, motivo o viajero */
+                q?: string | null;
+                sort?: "fecha_legalizacion" | "-fecha_legalizacion" | "folio" | "-folio" | "saldo" | "-saldo";
+                /** @description Página, desde 1 */
+                page?: number;
+                /** @description Tamaño de página (máx. 100) */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pagina_PagoFila_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resumen_api_v1_pagos_resumen_get: {
+        parameters: {
+            query?: {
+                proyecto_id?: string | null;
+                usuario_id?: string | null;
+                desde?: string | null;
+                hasta?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagosResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resumen_api_v1_indicadores_resumen_get: {
+        parameters: {
+            query?: {
+                desde?: string | null;
+                hasta?: string | null;
+                proyecto_id?: string | null;
+                rubro_id?: string | null;
+                celula_id?: string | null;
+                usuario_id?: string | null;
+                modalidad?: components["schemas"]["Modalidad"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndicadoresResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exportar_api_v1_indicadores_exportar_csv_get: {
+        parameters: {
+            query?: {
+                separador?: ";" | ",";
+                desde?: string | null;
+                hasta?: string | null;
+                proyecto_id?: string | null;
+                rubro_id?: string | null;
+                celula_id?: string | null;
+                usuario_id?: string | null;
+                modalidad?: components["schemas"]["Modalidad"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Un gasto por fila */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Validation Error */

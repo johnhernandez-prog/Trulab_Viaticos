@@ -25,6 +25,7 @@ from app.core.enums import (
     Modalidad,
     PropositoArchivo,
     Rol,
+    TipoLiquidacion,
 )
 from app.core.errors import NoEncontrado, ValorNoPermitido, error_de_campo
 from app.core.paginacion import ParametrosPagina, paginar, patron_busqueda
@@ -1263,13 +1264,13 @@ def registrar_valor_asignado(
     )
 
 
-def sentido_liquidacion(saldo: Decimal) -> str:
+def sentido_liquidacion(saldo: Decimal) -> TipoLiquidacion:
     """RN-02: `saldo > 0` el viajero reintegra; `saldo < 0` la empresa reembolsa."""
     if saldo > 0:
-        return "REINTEGRO"
+        return TipoLiquidacion.REINTEGRO
     if saldo < 0:
-        return "REEMBOLSO"
-    return "SIN_SALDO"
+        return TipoLiquidacion.REEMBOLSO
+    return TipoLiquidacion.SALDADO
 
 
 def cambiar_estado_financiero(
@@ -1332,7 +1333,7 @@ def cambiar_estado_financiero(
                         "valor_transferido": viatico.valor_transferido,
                         "total_gastos": total_gastos,
                         "saldo": saldo,
-                        "sentido": sentido_liquidacion(saldo),
+                        "sentido": sentido_liquidacion(saldo).value,
                     }
                 ),
             )

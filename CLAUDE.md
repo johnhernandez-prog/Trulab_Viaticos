@@ -140,6 +140,8 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 **S2-08 terminada** (2026-11-13): `firma_archivo_id` y `formato_adjunto_id` en `POST`/`PATCH /viaticos` (RN-32: firma, la del perfil por defecto; RN-33: formato de prestador); `aprobar` en etapa `SOLICITUD` exige ambos (`409 FIRMA_REQUERIDA`, `409 FORMATO_PRESTADOR_REQUERIDO`); `app/modules/viaticos/pdf.py` (Jinja2 + WeasyPrint sin red, plantillas en `app/templates/pdf/`) con `pdf-solicitud` y `pdf-legalizacion`. **1134 pruebas** en verde. Pendiente: `/pagos`, UI.
 
+**S2-09 terminada** (2026-11-13): **backend de la semana 2 cerrado.** `GET /pagos` (bandejas `pendientes_desembolso`/`pendientes_liquidacion`/`historico`, saldo y `tipo_liquidacion` desde `v_viatico_saldos`, acciones de tesorería por fila) y `GET /pagos/resumen`; `GET /indicadores/resumen` (dinero de legalizaciones aprobadas por proyecto —catálogo por id, "Otro" por nombre normalizado—, rubro, célula y mes; estados con S-07) y `GET /indicadores/exportar.csv` (streaming con sesión propia, BOM UTF-8, `;`, anti-inyección de fórmulas). ADMIN lee `/pagos` en solo lectura (DP-18). **1230 pruebas** en verde. Siguiente: UI de la semana 2.
+
 ## Cómo retomar
 
 1. Lee `HANDOFF.md`: estado, próxima tarea y bloqueos.

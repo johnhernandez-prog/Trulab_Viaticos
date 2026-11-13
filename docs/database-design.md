@@ -288,7 +288,7 @@ Reemplaza a `legalizacion_eventos`.
 | `id` | `UUID` PK | |
 | `viatico_id` | `UUID` FK | `NOT NULL` |
 | `etapa` | `TEXT` | `NOT NULL CHECK (etapa IN ('SOLICITUD','LEGALIZACION'))`. Etapa en la que ocurrió el evento |
-| `accion` | `TEXT` | `CHECK (accion IN ('CREAR','EDITAR_SOLICITUD','APROBAR','RECHAZAR','DEVOLVER','GESTIONAR_TIQUETES','HABILITAR_LEGALIZACION','CAMBIAR_ESTADO_FINANCIERO','EDITAR_VALOR_ASIGNADO','CAMBIAR_RECURSOS_PROPIOS','LIQUIDAR','ELIMINAR','REGISTRAR_GASTO','EDITAR_GASTO','ELIMINAR_GASTO'))`. `LIQUIDAR` registra reintegro o reembolso (datos: `{valor_transferido, total_gastos, saldo, sentido}`, `sentido` ∈ `REINTEGRO`/`REEMBOLSO`/`SIN_SALDO`). Las tres acciones de gastos se agregaron en S2-06 (migración `3b9e51c0d2a4`, solo amplía el `CHECK`) |
+| `accion` | `TEXT` | `CHECK (accion IN ('CREAR','EDITAR_SOLICITUD','APROBAR','RECHAZAR','DEVOLVER','GESTIONAR_TIQUETES','HABILITAR_LEGALIZACION','CAMBIAR_ESTADO_FINANCIERO','EDITAR_VALOR_ASIGNADO','CAMBIAR_RECURSOS_PROPIOS','LIQUIDAR','ELIMINAR','REGISTRAR_GASTO','EDITAR_GASTO','ELIMINAR_GASTO'))`. `LIQUIDAR` registra reintegro o reembolso (datos: `{valor_transferido, total_gastos, saldo, sentido}`, `sentido` ∈ `REINTEGRO`/`REEMBOLSO`/`SALDADO`). Las tres acciones de gastos se agregaron en S2-06 (migración `3b9e51c0d2a4`, solo amplía el `CHECK`) |
 | `dimension` | `TEXT NULL` | `CHECK (dimension IN ('OPERATIVO','FINANCIERO','ETAPA'))` |
 | `estado_anterior`, `estado_nuevo` | `TEXT NULL` | |
 | `comentario` | `TEXT NULL` | Obligatorio en `DEVOLVER` y `RECHAZAR` (service, RN-10) |
