@@ -27,7 +27,7 @@ explicit_package_bases = true
 
 # Sin anotaciones de tipos publicadas: se tratan como `Any` en sus fronteras (S1-08).
 [[tool.mypy.overrides]]
-module = ["google.*", "boto3", "boto3.*", "botocore.*"]
+module = ["google.*", "boto3", "boto3.*", "botocore.*", "weasyprint", "weasyprint.*", "PIL", "PIL.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -15,7 +15,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import Auditoria
-from app.core.enums import EstadoFinanciero, EstadoOperativo, Etapa, Modalidad, Rol
+from app.core.enums import (
+    EstadoFinanciero,
+    EstadoOperativo,
+    Etapa,
+    Modalidad,
+    PropositoArchivo,
+    Rol,
+)
 from app.modules.usuarios.models import Usuario
 from app.modules.viaticos.models import Viatico, ViaticoEvento
 from app.modules.viaticos.service import sentido_liquidacion
@@ -535,8 +542,15 @@ def test_flujo_completo_con_solicitud(api: TestClient, sesion: Session) -> None:
     viajero, enc_viajero = _actor(sesion, Rol.VIAJERO)
     _, enc_admin = _actor(sesion, Rol.ADMIN)
     _, enc_fin = _actor(sesion, Rol.FINANCIERO)
+    firma = crear_archivo(
+        sesion, created_by=viajero.id, proposito=PropositoArchivo.FIRMA, mime_type="image/png"
+    )
     viatico = crear_viatico(
-        sesion, usuario=viajero, modalidad=Modalidad.CON_SOLICITUD, requiere_gastos_viaje=True
+        sesion,
+        usuario=viajero,
+        modalidad=Modalidad.CON_SOLICITUD,
+        requiere_gastos_viaje=True,
+        firma_archivo_id=firma.id,
     )
     soporte = crear_archivo(sesion, created_by=viajero.id)
     rubro = crear_rubro(sesion)

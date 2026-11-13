@@ -20,10 +20,10 @@ from app.core.enums import (
     PropositoArchivo,
     Rol,
 )
+from app.core.tiempo import hoy_colombia
 from app.modules.archivos.models import Archivo
 from app.modules.catalogos.models import Rubro
 from app.modules.gastos.models import Gasto
-from app.modules.gastos.service import hoy_colombia
 from app.modules.usuarios.models import Usuario
 from app.modules.viaticos.models import Viatico, ViaticoEvento
 from tests.fabricas import (

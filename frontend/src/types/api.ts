@@ -610,6 +610,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/viaticos/{viatico_id}/pdf-solicitud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** PDF de la solicitud con la firma incrustada (dueño, FINANCIERO, ADMIN, SUPERADMIN) */
+        get: operations["pdf_solicitud_api_v1_viaticos__viatico_id__pdf_solicitud_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/pdf-legalizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** PDF de la legalización: gastos y liquidación (dueño, FINANCIERO, ADMIN, SUPERADMIN) */
+        get: operations["pdf_legalizacion_api_v1_viaticos__viatico_id__pdf_legalizacion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/viaticos/{viatico_id}/gastos": {
         parameters: {
             query?: never;
@@ -783,6 +817,18 @@ export interface components {
         };
         /** AdjuntoRef */
         AdjuntoRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nombre */
+            nombre: string | null;
+            /** Mime Type */
+            mime_type: string | null;
+        };
+        /** ArchivoRefSalida */
+        ArchivoRefSalida: {
             /**
              * Id
              * Format: uuid
@@ -1408,6 +1454,8 @@ export interface components {
             presupuesto_solicitado: string | null;
             /** Comentarios */
             comentarios: string | null;
+            firma: components["schemas"]["ArchivoRefSalida"] | null;
+            formato_adjunto: components["schemas"]["ArchivoRefSalida"] | null;
             /** Trayectos */
             trayectos: components["schemas"]["TrayectoSalida"][];
         };
@@ -1747,6 +1795,10 @@ export interface components {
             comentarios?: string | null;
             /** Trayectos */
             trayectos: components["schemas"]["TrayectoEntradaSchema"][];
+            /** Firma Archivo Id */
+            firma_archivo_id?: string | null;
+            /** Formato Adjunto Id */
+            formato_adjunto_id?: string | null;
         };
         /** ViaticoCrearLegalizacionDirecta */
         ViaticoCrearLegalizacionDirecta: {
@@ -1839,6 +1891,10 @@ export interface components {
             trayectos?: components["schemas"]["TrayectoEntradaSchema"][] | null;
             /** Recursos Propios */
             recursos_propios?: boolean | null;
+            /** Firma Archivo Id */
+            firma_archivo_id?: string | null;
+            /** Formato Adjunto Id */
+            formato_adjunto_id?: string | null;
         };
         /** ViaticoResumen */
         ViaticoResumen: {
@@ -3359,6 +3415,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pdf_solicitud_api_v1_viaticos__viatico_id__pdf_solicitud_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF del documento */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pdf_legalizacion_api_v1_viaticos__viatico_id__pdf_legalizacion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF del documento */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
                 };
             };
             /** @description Validation Error */

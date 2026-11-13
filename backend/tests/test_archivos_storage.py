@@ -147,6 +147,24 @@ def test_s3_guarda_cifrado_con_el_tipo_detectado() -> None:
         stub.assert_no_pending_responses()
 
 
+def test_s3_lee_el_contenido() -> None:
+    import io
+
+    from botocore.response import StreamingBody
+
+    cliente = _cliente_s3()
+    almacen = AlmacenamientoS3("trulab-bucket", cliente)
+    cuerpo = b"%PDF-1.7 contenido"
+    with Stubber(cliente) as stub:
+        stub.add_response(
+            "get_object",
+            {"Body": StreamingBody(io.BytesIO(cuerpo), len(cuerpo))},
+            {"Bucket": "trulab-bucket", "Key": "archivo/x.pdf"},
+        )
+
+        assert almacen.leer("archivo/x.pdf") == cuerpo
+
+
 def test_s3_url_prefirmada_de_cinco_minutos() -> None:
     almacen = AlmacenamientoS3("trulab-bucket", _cliente_s3())
 

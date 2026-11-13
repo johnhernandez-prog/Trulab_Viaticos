@@ -29,7 +29,7 @@ El informe original de auditoría de AppSheet (*INFORME FINAL PARA PROYECTO TRUL
 ## Stack
 
 - **Frontend:** React 18 + Vite 6 + TypeScript 5.9, Tailwind 3 + shadcn/ui, TanStack Query, React Router, React Hook Form + Zod, Recharts, Lucide.
-- **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (síncrono), Alembic, psycopg 3, WeasyPrint.
+- **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (síncrono), Alembic, psycopg 3, Jinja2 + WeasyPrint (PDF desde S2-08).
 - **Seguridad:** `argon2-cffi` (Argon2id, contraseñas de operativos), `google-auth` (solo SUPERADMIN), PyJWT.
 - **Datos y nube (AWS, ADR-028):** PostgreSQL 16 con RLS (**Amazon RDS** en staging/producción); archivos en **Amazon S3** privado y correo con **Amazon SES** (`boto3`); cómputo en ECS Fargate o App Runner (DP-21). GCP descartado. En local: `STORAGE_BACKEND=local`, `MAIL_BACKEND=log`.
 - **Runtime del frontend:** Node 24 LTS, estándar del proyecto (**ADR-026**, aprobado el 2026-11-12); versión fijada en `frontend/.nvmrc` (24.22.1), igual que la imagen. Versiones npm exactas.
@@ -137,6 +137,8 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 **S2-04b/S2-05 terminada** (2026-11-13): `GET /viaticos` (listado paginado, filtros, orden fijo `-created_at`, resumen financiero de `v_viatico_saldos`, `acciones_permitidas`); `PATCH`/`DELETE` solo dueño o SUPERADMIN en `PENDIENTE`/`PENDIENTE` (RN-09/S-05, recalcula el presupuesto solo si cambia lo que afecta el cálculo); `transicionar()` (bloqueo `FOR UPDATE`, evento en la misma transacción) con `aprobar` (RN-06/RN-21 en `LEGALIZACION`, `409 COMPROBANTE_FALTANTE`), `rechazar`, `devolver` (RN-20) y `habilitar-legalizacion` (RN-28); RN-27 con código propio `403 AUTOAPROBACION_NO_PERMITIDA` (antes `SIN_PERMISO` en el contrato) y auditoría `AUTOAPROBACION_SUPERADMIN` para la excepción de SUPERADMIN. Nuevo `app/modules/viaticos/acciones.py` (función pura, 24 pruebas). **834 pruebas** en verde. Pendiente, fuera de este alcance (depende de gastos/archivos): `valor-asignado`, `estado-financiero`, `gestionar-tiquetes`, firma/formato adjunto, PDF.
 
 **S2-06/S2-07 terminada** (2026-11-13): `app/modules/archivos` (tipo por *magic bytes* por propósito, `AlmacenamientoLocal`/`AlmacenamientoS3`, `POST /archivos`, URL temporal de 5 min, `/me/firma`), `app/modules/gastos` (CRUD JSON en `/viaticos/{id}/gastos`, adjuntos por id, 1:1, eventos `REGISTRAR_GASTO`/`EDITAR_GASTO`/`ELIMINAR_GASTO`, migración `3b9e51c0d2a4`) y `gestionar-tiquetes`, `valor-asignado`, `estado-financiero` con `LIQUIDAR`. **1050 pruebas** en verde. Pendiente: firma/formato del viático (RN-32/RN-33 al aprobar), PDF, `/pagos`, UI.
+
+**S2-08 terminada** (2026-11-13): `firma_archivo_id` y `formato_adjunto_id` en `POST`/`PATCH /viaticos` (RN-32: firma, la del perfil por defecto; RN-33: formato de prestador); `aprobar` en etapa `SOLICITUD` exige ambos (`409 FIRMA_REQUERIDA`, `409 FORMATO_PRESTADOR_REQUERIDO`); `app/modules/viaticos/pdf.py` (Jinja2 + WeasyPrint sin red, plantillas en `app/templates/pdf/`) con `pdf-solicitud` y `pdf-legalizacion`. **1134 pruebas** en verde. Pendiente: `/pagos`, UI.
 
 ## Cómo retomar
 

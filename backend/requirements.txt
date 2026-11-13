@@ -17,3 +17,6 @@ requests==2.32.4
 python-multipart==0.0.20
 # AWS (ADR-028): Amazon SES (correo) desde S1-08; Amazon S3 desde S2-07.
 boto3==1.38.46
+# PDF oficiales (S2-08): plantillas Jinja2 + WeasyPrint (las librerías nativas están en la imagen).
+jinja2==3.1.6
+weasyprint==66.0

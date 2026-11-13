@@ -28,3 +28,12 @@ def _zip(nombres: list[str]) -> bytes:
 XLSX = _zip(["[Content_Types].xml", "xl/workbook.xml", "xl/worksheets/sheet1.xml"])
 DOCX = _zip(["[Content_Types].xml", "word/document.xml"])
 ZIP = _zip(["leeme.txt"])
+
+
+def png_real() -> bytes:
+    """Un PNG decodificable (para probar que la firma se incrusta de verdad en el PDF)."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (120, 40), (20, 20, 120)).save(buffer, "PNG")
+    return buffer.getvalue()

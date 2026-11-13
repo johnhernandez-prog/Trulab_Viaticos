@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>{% block titulo %}{% endblock %} · {{ folio }}</title>
+<style>
+  @page {
+    size: Letter portrait;
+    margin: 18mm 14mm 18mm 14mm;
+    @bottom-left { content: string(folio) " · {% block pie %}{% endblock %}"; font-size: 7.5pt; color: #6b7280; }
+    @bottom-right { content: "Página " counter(page) " de " counter(pages); font-size: 7.5pt; color: #6b7280; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 8.5pt; color: #111827; line-height: 1.35; }
+  .encabezado { display: flex; justify-content: space-between; align-items: flex-end;
+                border-bottom: 2px solid #0f766e; padding-bottom: 6px; margin-bottom: 10px; }
+  .marca { font-size: 20pt; font-weight: bold; color: #0f766e; letter-spacing: 1px; }
+  .marca small { display: block; font-size: 7pt; font-weight: normal; color: #6b7280; letter-spacing: 0; }
+  .doc { text-align: right; }
+  .doc h1 { font-size: 12pt; margin: 0; }
+  .folio { font-size: 15pt; font-weight: bold; string-set: folio content(); }
+  h2 { font-size: 9.5pt; color: #0f766e; text-transform: uppercase; letter-spacing: .5px;
+       border-bottom: 1px solid #d1d5db; padding-bottom: 2px; margin: 12px 0 5px; break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #d1d5db; padding: 3px 5px; vertical-align: top; text-align: left; }
+  th { background: #f3f4f6; font-size: 7.5pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  .num { text-align: right; white-space: nowrap; }
+  th.num { white-space: normal; }
+  table.presupuesto { font-size: 7.5pt; }
+  table.presupuesto th, table.presupuesto td { padding: 3px 3px; }
+  table.datos td.k { width: 24%; background: #f9fafb; font-weight: bold; }
+  .nota { color: #4b5563; font-style: italic; margin: 4px 0; }
+  .total td { font-weight: bold; background: #f3f4f6; }
+  .alerta { border: 1px solid #b45309; background: #fffbeb; color: #92400e; padding: 4px 6px; margin: 6px 0; font-weight: bold; }
+  .firma { height: 70px; margin-top: 4px; }
+  .firma img { max-height: 70px; max-width: 220px; }
+  .firma-linea { border-top: 1px solid #111827; width: 340px; padding-top: 2px; margin-top: 2px; }
+  .saldo { font-size: 10pt; font-weight: bold; }
+  .reintegro { color: #b45309; }
+  .reembolso { color: #b91c1c; }
+</style>
+</head>
+<body>
+  <div class="encabezado">
+    <div class="marca">TRULAB<small>Viajes · viáticos y legalizaciones</small></div>
+    <div class="doc">
+      <h1>{% block nombre_documento %}{% endblock %}</h1>
+      <div class="folio">{{ folio }}</div>
+      <div>Generado el {{ generado | fecha_hora }}</div>
+    </div>
+  </div>
+  {% block contenido %}{% endblock %}
+</body>
+</html>

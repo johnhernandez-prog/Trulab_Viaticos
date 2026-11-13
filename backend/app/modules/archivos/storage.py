@@ -32,6 +32,8 @@ RUTA_CONTENIDO_LOCAL = "/api/v1/archivos/contenido"
 class Almacenamiento(Protocol):
     def guardar(self, clave: str, contenido: bytes, mime_type: str) -> None: ...
 
+    def leer(self, clave: str) -> bytes: ...
+
     def url_lectura(self, clave: str, *, mime_type: str, nombre: str, expira_en: int) -> str: ...
 
 
@@ -128,6 +130,10 @@ class AlmacenamientoS3:
             ContentType=mime_type,
             ServerSideEncryption="AES256",
         )
+
+    def leer(self, clave: str) -> bytes:
+        cuerpo: bytes = self.cliente.get_object(Bucket=self.bucket, Key=clave)["Body"].read()
+        return cuerpo
 
     def url_lectura(self, clave: str, *, mime_type: str, nombre: str, expira_en: int) -> str:
         url: str = self.cliente.generate_presigned_url(

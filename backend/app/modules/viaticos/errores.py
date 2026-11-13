@@ -71,3 +71,31 @@ class LegalizacionNoHabilitable(ErrorDominio):
     status = 409
     code = "LEGALIZACION_NO_HABILITABLE"
     title = "La legalización no se puede habilitar todavía"
+
+
+class FirmaRequerida(ErrorDominio):
+    # RN-32: sin la firma del solicitante no se aprueba la solicitud.
+    status = 409
+    code = "FIRMA_REQUERIDA"
+    title = "La solicitud necesita la firma del solicitante para aprobarse"
+
+
+class FormatoPrestadorRequerido(ErrorDominio):
+    # RN-33: prestador + proyecto con `exige_formato_prestador`: sin formato no se aprueba.
+    status = 409
+    code = "FORMATO_PRESTADOR_REQUERIDO"
+    title = "La solicitud necesita el formato diligenciado del prestador para aprobarse"
+
+
+class ModalidadInvalida(ErrorDominio):
+    # El documento solo existe para otra modalidad (p. ej. PDF de solicitud en una directa).
+    status = 409
+    code = "MODALIDAD_INVALIDA"
+    title = "La acción no corresponde a la modalidad del viático"
+
+
+class EtapaInvalida(ErrorDominio):
+    # El viático todavía no llegó a la etapa que pide el documento o la acción.
+    status = 409
+    code = "ETAPA_INVALIDA"
+    title = "La acción no corresponde a la etapa actual del viático"

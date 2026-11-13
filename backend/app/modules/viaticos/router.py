@@ -6,15 +6,16 @@ tiquetes y el dinero (`gestionar-tiquetes`, `valor-asignado`, `estado-financiero
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.core.enums import EstadoFinanciero, EstadoOperativo, Etapa, Modalidad
 from app.core.paginacion import Pagina, Paginacion
 from app.core.permissions import Permiso, require_permission
+from app.modules.archivos.storage import Almacenamiento, content_disposition, get_almacenamiento
 from app.modules.auth.dependencias import DB, Autenticado, Ctx
-from app.modules.viaticos import service
+from app.modules.viaticos import pdf, service
 from app.modules.viaticos.schemas import (
     AccionEntrada,
     CalcularPresupuestoEntrada,
@@ -46,6 +47,7 @@ Tesorero = Annotated[
 Liquidador = Annotated[
     Autenticado, Depends(require_permission(Permiso.VIATICOS_CAMBIAR_ESTADO_FINANCIERO))
 ]
+Almacen = Annotated[Almacenamiento, Depends(get_almacenamiento)]
 Habilitador = Annotated[
     Autenticado, Depends(require_permission(Permiso.VIATICOS_HABILITAR_LEGALIZACION))
 ]
@@ -236,3 +238,47 @@ def estado_financiero(
         session, viatico_id, autenticado.usuario, datos.estado_financiero, datos.comentario, ctx
     )
     return service.detalle(session, viatico, autenticado.usuario)
+
+
+_RESPUESTA_PDF: dict[int | str, dict[str, Any]] = {
+    200: {"content": {"application/pdf": {}}, "description": "PDF del documento"}
+}
+
+
+def _respuesta_pdf(contenido: bytes, nombre: str) -> Response:
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": content_disposition(nombre, inline=False),
+            # Lleva cédula y firma: ni caché compartida ni almacenamiento en el navegador.
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get(
+    "/{viatico_id}/pdf-solicitud",
+    response_class=Response,
+    responses=_RESPUESTA_PDF,
+    summary="PDF de la solicitud con la firma incrustada (dueño, FINANCIERO, ADMIN, SUPERADMIN)",
+)
+def pdf_solicitud(
+    viatico_id: uuid.UUID, autenticado: Lector, session: DB, almacenamiento: Almacen
+) -> Response:
+    contenido, nombre = pdf.generar_solicitud(
+        session, almacenamiento, viatico_id, autenticado.usuario
+    )
+    return _respuesta_pdf(contenido, nombre)
+
+
+@router.get(
+    "/{viatico_id}/pdf-legalizacion",
+    response_class=Response,
+    responses=_RESPUESTA_PDF,
+    summary="PDF de la legalización: gastos y liquidación (dueño, FINANCIERO, ADMIN, SUPERADMIN)",
+)
+def pdf_legalizacion(viatico_id: uuid.UUID, autenticado: Lector, session: DB) -> Response:
+    contenido, nombre = pdf.generar_legalizacion(session, viatico_id, autenticado.usuario)
+    return _respuesta_pdf(contenido, nombre)

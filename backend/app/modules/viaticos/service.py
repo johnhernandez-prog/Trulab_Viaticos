@@ -23,11 +23,14 @@ from app.core.enums import (
     EstadoOperativo,
     Etapa,
     Modalidad,
+    PropositoArchivo,
     Rol,
 )
 from app.core.errors import NoEncontrado, ValorNoPermitido, error_de_campo
 from app.core.paginacion import ParametrosPagina, paginar, patron_busqueda
 from app.core.permissions import SinPermiso
+from app.modules.archivos import service as archivos
+from app.modules.archivos.models import Archivo
 from app.modules.auth.schemas import Referencia
 from app.modules.auth.service import Contexto
 from app.modules.cargos.models import Cargo
@@ -47,6 +50,8 @@ from app.modules.viaticos.errores import (
     ComentarioRequerido,
     ComprobanteFaltante,
     FechaNacimientoRequerida,
+    FirmaRequerida,
+    FormatoPrestadorRequerido,
     LegalizacionNoHabilitable,
     NoEditable,
     ProyectoAmbiguo,
@@ -57,6 +62,7 @@ from app.modules.viaticos.models import Viatico as ViaticoModelo
 from app.modules.viaticos.models import ViaticoEvento
 from app.modules.viaticos.models import ViaticoTrayecto as ViaticoTrayectoModelo
 from app.modules.viaticos.schemas import (
+    ArchivoRefSalida,
     CalcularPresupuestoEntrada,
     ColaboradorSalida,
     EventoSalida,
@@ -218,6 +224,42 @@ def _instantanea_colaborador(session: Session, usuario: Usuario) -> dict[str, ob
     }
 
 
+# --- firma y formato de prestador de la solicitud (RN-32, RN-33) --------------------------------
+
+
+def _validar_firma(session: Session, firma_id: uuid.UUID, actor: Usuario) -> None:
+    archivos.validar_adjunto(session, firma_id, actor, PropositoArchivo.FIRMA, "firma_archivo_id")
+
+
+def _validar_formato(session: Session, formato_id: uuid.UUID, actor: Usuario) -> None:
+    archivos.validar_adjunto(
+        session, formato_id, actor, PropositoArchivo.FORMATO_PRESTADOR, "formato_adjunto_id"
+    )
+
+
+def _referencias_archivos(
+    session: Session, ids: Sequence[uuid.UUID | None]
+) -> dict[uuid.UUID, Archivo]:
+    buscados = {i for i in ids if i is not None}
+    if not buscados:
+        return {}
+    # RLS de `archivos`: un archivo que subió otro usuario puede no ser visible (→ sin nombre).
+    return {a.id: a for a in session.scalars(select(Archivo).where(Archivo.id.in_(buscados)))}
+
+
+def _ref_archivo(
+    archivo_id: uuid.UUID | None, visibles: dict[uuid.UUID, Archivo]
+) -> ArchivoRefSalida | None:
+    if archivo_id is None:
+        return None
+    archivo = visibles.get(archivo_id)
+    return ArchivoRefSalida(
+        id=archivo_id,
+        nombre=archivo.nombre_original if archivo is not None else None,
+        mime_type=archivo.mime_type if archivo is not None else None,
+    )
+
+
 # --- crear (ADR-029: dos modalidades) ----------------------------------------------------------
 
 
@@ -240,6 +282,12 @@ def _crear_con_solicitud(
         obtener_proyecto_activo(session, datos.proyecto_id)
     if datos.requiere_tiquete and actor.fecha_nacimiento is None:
         raise FechaNacimientoRequerida()
+    # Firma: la enviada (propia, imagen) o, si no, la del perfil (RN-32).
+    if datos.firma_archivo_id is not None:
+        _validar_firma(session, datos.firma_archivo_id, actor)
+    firma_id = datos.firma_archivo_id or actor.firma_archivo_id
+    if datos.formato_adjunto_id is not None:
+        _validar_formato(session, datos.formato_adjunto_id, actor)
 
     resultado = calcular_presupuesto_bd(
         session,
@@ -263,6 +311,8 @@ def _crear_con_solicitud(
         requiere_gastos_viaje=datos.requiere_gastos_viaje,
         presupuesto_solicitado=resultado.presupuesto_solicitado,
         comentarios=datos.comentarios,
+        firma_archivo_id=firma_id,
+        formato_adjunto_id=datos.formato_adjunto_id,
         created_by=actor.id,
         updated_by=actor.id,
         **_instantanea_colaborador(session, actor),
@@ -375,6 +425,9 @@ def detalle(session: Session, viatico: ViaticoModelo, actor: Usuario) -> Viatico
             .where(ViaticoTrayectoModelo.viatico_id == viatico.id)
             .order_by(ViaticoTrayectoModelo.orden)
         ).all()
+        visibles = _referencias_archivos(
+            session, [viatico.firma_archivo_id, viatico.formato_adjunto_id]
+        )
         solicitud = SolicitudSalida(
             proyecto=proyecto_ref,
             lider_proyecto=viatico.lider_proyecto or "",
@@ -383,6 +436,8 @@ def detalle(session: Session, viatico: ViaticoModelo, actor: Usuario) -> Viatico
             requiere_gastos_viaje=viatico.requiere_gastos_viaje,
             presupuesto_solicitado=viatico.presupuesto_solicitado,
             comentarios=viatico.comentarios,
+            firma=_ref_archivo(viatico.firma_archivo_id, visibles),
+            formato_adjunto=_ref_archivo(viatico.formato_adjunto_id, visibles),
             trayectos=[TrayectoSalida.model_validate(t) for t in trayectos],
         )
 
@@ -599,7 +654,13 @@ _CAMPOS_SOLICITUD = frozenset(
         "requiere_gastos_viaje",
         "comentarios",
         "trayectos",
+        "firma_archivo_id",
+        "formato_adjunto_id",
     }
+)
+_ADJUNTOS_SOLICITUD = (
+    ("firma_archivo_id", PropositoArchivo.FIRMA),
+    ("formato_adjunto_id", PropositoArchivo.FORMATO_PRESTADOR),
 )
 
 
@@ -633,6 +694,13 @@ def _editar_solicitud(
     nuevo_requiere_gastos_viaje = cambios.get(
         "requiere_gastos_viaje", viatico.requiere_gastos_viaje
     )
+    # Adjuntos (RN-32, RN-33): solo se validan los que cambian; `null` quita el adjunto.
+    nuevos_adjuntos: dict[str, uuid.UUID | None] = {}
+    for campo, proposito in _ADJUNTOS_SOLICITUD:
+        if campo in cambios and cambios[campo] != getattr(viatico, campo):
+            if cambios[campo] is not None:
+                archivos.validar_adjunto(session, cambios[campo], actor, proposito, campo)
+            nuevos_adjuntos[campo] = cambios[campo]
 
     antes: dict[str, object] = {}
     despues: dict[str, object] = {}
@@ -659,6 +727,10 @@ def _editar_solicitud(
             viatico.requiere_gastos_viaje,
             nuevo_requiere_gastos_viaje,
         )
+
+    for campo, nuevo in nuevos_adjuntos.items():
+        antes[campo], despues[campo] = getattr(viatico, campo), nuevo
+        setattr(viatico, campo, nuevo)
 
     if _CAMPOS_DISPARAN_RECALCULO & set(cambios):
         # `model_dump()` ya convirtió los trayectos nuevos en dicts; se reconstruyen los esquemas.
@@ -890,6 +962,45 @@ _CAMPO_ESTADO = {
 }
 
 
+def _exigir_adjuntos_solicitud(
+    session: Session, viatico: ViaticoModelo
+) -> dict[str, object] | None:
+    """Aprobar una solicitud exige, además de lo que ya valida su creación:
+
+    - **RN-33:** si el solicitante era prestador de servicios (instantánea RN-17) y el proyecto del
+      catálogo tiene `exige_formato_prestador`, el formato diligenciado. Un proyecto escrito con
+      "Otro" nunca lo exige.
+    - **RN-32:** la firma del solicitante: la del viático o, si no tiene, la guardada en el perfil
+      del dueño, que se copia al viático (así el PDF y el historial no cambian si el perfil sí).
+    """
+    if viatico.colaborador_es_prestador and viatico.proyecto_id is not None:
+        proyecto = session.get(Proyecto, viatico.proyecto_id)
+        if (
+            proyecto is not None
+            and proyecto.exige_formato_prestador
+            and viatico.formato_adjunto_id is None
+        ):
+            raise FormatoPrestadorRequerido(
+                detail=f"El proyecto {proyecto.nombre} exige el formato diligenciado del prestador",
+                errors=error_de_campo(
+                    "formato_adjunto_id",
+                    "Adjunte el formato de prestador (PDF o Excel)",
+                    "FORMATO_PRESTADOR_REQUERIDO",
+                ),
+            )
+    if viatico.firma_archivo_id is not None:
+        return None
+    dueno = session.get(Usuario, viatico.usuario_id)
+    if dueno is None or dueno.firma_archivo_id is None:
+        raise FirmaRequerida(
+            errors=error_de_campo(
+                "firma_archivo_id", "Falta la firma del solicitante", "FIRMA_REQUERIDA"
+            )
+        )
+    viatico.firma_archivo_id = dueno.firma_archivo_id
+    return {"firma_desde_perfil": dueno.firma_archivo_id}
+
+
 def transicionar(
     session: Session,
     viatico_id: uuid.UUID,
@@ -940,17 +1051,20 @@ def transicionar(
 def aprobar(
     session: Session, viatico_id: uuid.UUID, actor: Usuario, comentario: str | None, ctx: Contexto
 ) -> ViaticoModelo:
-    def mutar(viatico: ViaticoModelo) -> None:
+    def mutar(viatico: ViaticoModelo) -> dict[str, object] | None:
         _exigir_no_autoaprobacion(session, viatico, actor, ctx)
         if viatico.estado != EstadoOperativo.PENDIENTE:
             raise TransicionInvalida(detail="El viático no está pendiente de aprobación")
+        datos: dict[str, object] | None = None
         if viatico.etapa == Etapa.LEGALIZACION:
             _exigir_gastos_con_comprobante(session, viatico)
+        else:
+            datos = _exigir_adjuntos_solicitud(session, viatico)
         viatico.estado = EstadoOperativo.APROBADO
         viatico.aprobada_at = datetime.now(UTC)
         if comentario:
             viatico.observaciones = comentario
-        return None
+        return datos
 
     return transicionar(
         session,

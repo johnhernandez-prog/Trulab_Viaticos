@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "_comunes.html" as c %}
+{% block titulo %}Solicitud de viáticos y tiquetes{% endblock %}
+{% block pie %}Solicitud de viáticos y tiquetes{% endblock %}
+{% block nombre_documento %}Solicitud de viáticos y tiquetes{% endblock %}
+{% block contenido %}
+<table class="datos">
+  <tr><td class="k">Fecha de solicitud</td><td>{{ creado | fecha }}</td>
+      <td class="k">Estado</td><td>{{ estado }}</td></tr>
+</table>
+
+<h2>Datos del viajero</h2>
+{{ c.colaborador_tabla(colaborador) }}
+
+<h2>Solicitud</h2>
+<table class="datos">
+  <tr><td class="k">Motivo del viaje</td><td colspan="3">{{ motivo }}</td></tr>
+  <tr><td class="k">Proyecto</td><td>{{ proyecto.nombre }}{% if not proyecto.en_catalogo %} <em>(escrito con «Otro»)</em>{% endif %}</td>
+      <td class="k">Líder del proyecto</td><td>{{ lider }}</td></tr>
+  <tr><td class="k">Empresa</td><td>{{ empresa or "—" }}</td>
+      <td class="k">Tiquetes</td><td>{{ "Sí" if requiere_tiquete else "No" }}</td></tr>
+  <tr><td class="k">Gastos de viaje</td><td colspan="3">{{ "Sí" if requiere_gastos_viaje else "No" }}</td></tr>
+</table>
+
+<h2>Trayectos</h2>
+<table>
+  <thead><tr><th>#</th><th>Origen</th><th>Destino</th><th>Ida</th><th>Regreso</th><th>Hospedaje</th><th class="num">Días</th></tr></thead>
+  <tbody>
+  {% for t in trayectos %}
+    <tr><td>{{ t.orden }}</td><td>{{ t.ciudad_origen }}</td><td>{{ t.ciudad_destino }}</td>
+        <td>{{ t.fecha_ida | fecha_hora }}</td><td>{{ t.fecha_regreso | fecha_hora }}</td>
+        <td>{{ "Sí" if t.requiere_hospedaje else "No" }}</td><td class="num">{{ t.dias_estadia }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Presupuesto</h2>
+{% if presupuesto.modo == "tabla" %}
+<table class="presupuesto">
+  <thead><tr><th>#</th><th>Destino</th><th class="num">Alimentación/día</th><th class="num">Transp. interno/día</th>
+    <th class="num">Otros/día</th><th class="num">Subtotal estadía</th><th class="num">Aeropuerto</th><th class="num">Intermunicipal</th><th class="num">Total trayecto</th></tr></thead>
+  <tbody>
+  {% for t in trayectos %}
+    <tr><td>{{ t.orden }}</td><td>{{ t.ciudad_destino }}</td>
+        <td class="num">{{ t.vr_alimentacion | cop }}</td><td class="num">{{ t.trans_interno | cop }}</td>
+        <td class="num">{{ t.otros_gastos | cop }}</td><td class="num">{{ t.subtotal_estadia | cop }}</td>
+        <td class="num">{{ t.transporte_aeropuerto | cop }}</td><td class="num">{{ t.transporte_intermunicipal | cop }}</td>
+        <td class="num">{{ t.total_trayecto | cop }}</td></tr>
+  {% endfor %}
+    <tr class="total"><td colspan="8">Presupuesto solicitado</td><td class="num">{{ presupuesto.total | cop }}</td></tr>
+  </tbody>
+</table>
+<p class="nota">Monto de referencia para el desembolso: el valor que se transfiere lo fija Financiero.
+  Subtotal de estadía = (alimentación + transporte interno + otros) × días.</p>
+{% elif presupuesto.modo == "formato" %}
+<p>No se calcula presupuesto por tabla: el solicitante es prestador de servicios y el proyecto exige el
+  formato diligenciado. Formato adjunto: <strong>{{ presupuesto.formato_nombre or "pendiente de adjuntar" }}</strong>.</p>
+{% else %}
+<p class="nota">La solicitud no incluye gastos de viaje: no hay presupuesto.</p>
+{% endif %}
+
+{% if comentarios %}
+<h2>Comentarios</h2>
+<p>{{ comentarios }}</p>
+{% endif %}
+
+<h2>Firma del solicitante</h2>
+{% if firma_uri %}
+<div class="firma"><img src="{{ firma_uri }}" alt="Firma del solicitante"></div>
+<div class="firma-linea">{{ colaborador.nombre }}{% if colaborador.cedula %} · C.C. {{ colaborador.cedula }}{% endif %}</div>
+{% else %}
+<div class="alerta">SIN FIRMA — borrador: la solicitud no se puede aprobar hasta que tenga la firma del solicitante.</div>
+{% endif %}
+
+{{ c.trazabilidad(eventos, "Sin eventos registrados.") }}
+{% endblock %}

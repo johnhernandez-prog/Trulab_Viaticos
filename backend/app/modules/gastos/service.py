@@ -18,7 +18,7 @@
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -32,26 +32,21 @@ from app.core.enums import (
     PropositoArchivo,
 )
 from app.core.errors import NoEncontrado, ValorNoPermitido, error_de_campo
+from app.core.tiempo import hoy_colombia
 from app.modules.archivos import service as archivos
 from app.modules.archivos.models import Archivo
 from app.modules.auth.schemas import Referencia
 from app.modules.catalogos.models import Proyecto, Rubro
-from app.modules.gastos.errores import AdjuntoEnUso, EtapaInvalida
+from app.modules.gastos.errores import AdjuntoEnUso
 from app.modules.gastos.models import Gasto
 from app.modules.gastos.schemas import AdjuntoRef, GastoCrear, GastoEditar, GastoSalida
 from app.modules.usuarios.models import Usuario
 from app.modules.viaticos import service as viaticos
-from app.modules.viaticos.errores import NoEditable
+from app.modules.viaticos.errores import EtapaInvalida, NoEditable
 from app.modules.viaticos.models import Viatico, ViaticoEvento
 from app.modules.viaticos.schemas import ProyectoRefSalida
 
-# Colombia no tiene horario de verano: UTC-5 fijo (evita depender de tzdata en el contenedor).
-ZONA_COLOMBIA = timezone(timedelta(hours=-5), "America/Bogota")
 _LIQUIDADO = frozenset({EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO})
-
-
-def hoy_colombia() -> date:
-    return datetime.now(ZONA_COLOMBIA).date()
 
 
 # --- alcance y estado del viático padre ----------------------------------------------------------

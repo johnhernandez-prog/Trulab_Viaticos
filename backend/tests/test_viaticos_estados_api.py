@@ -10,7 +10,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import Auditoria
-from app.core.enums import EstadoFinanciero, EstadoOperativo, Etapa, Modalidad, Rol
+from app.core.enums import (
+    EstadoFinanciero,
+    EstadoOperativo,
+    Etapa,
+    Modalidad,
+    PropositoArchivo,
+    Rol,
+)
+from app.modules.archivos.models import Archivo
 from app.modules.usuarios.models import Usuario
 from app.modules.viaticos.models import ViaticoEvento
 from tests.fabricas import bearer, crear_archivo, crear_gasto, crear_usuario, crear_viatico
@@ -23,6 +31,13 @@ def _actor(
 ) -> tuple[Usuario, dict[str, str]]:
     usuario = crear_usuario(sesion, rol=rol, **campos)
     return usuario, bearer(sesion, usuario)
+
+
+def _firma(sesion: Session, dueno: Usuario) -> Archivo:
+    # RN-32: aprobar una solicitud exige la firma del solicitante.
+    return crear_archivo(
+        sesion, created_by=dueno.id, proposito=PropositoArchivo.FIRMA, mime_type="image/png"
+    )
 
 
 def _eventos(sesion: Session, accion: str, viatico_id: uuid.UUID) -> list[ViaticoEvento]:
@@ -95,7 +110,12 @@ def test_superadmin_aprueba_su_propio_viatico_y_queda_auditado(
     api: TestClient, sesion: Session
 ) -> None:
     superadmin, encabezados = _actor(sesion, Rol.SUPERADMIN)
-    viatico = crear_viatico(sesion, usuario=superadmin, modalidad=Modalidad.CON_SOLICITUD)
+    viatico = crear_viatico(
+        sesion,
+        usuario=superadmin,
+        modalidad=Modalidad.CON_SOLICITUD,
+        firma_archivo_id=_firma(sesion, superadmin).id,
+    )
 
     respuesta = api.post(f"{URL}/{viatico.id}/aprobar", json={}, headers=encabezados)
 
@@ -137,7 +157,13 @@ def test_no_se_aprueba_una_legalizacion_con_un_gasto_sin_comprobante(
 
 def test_se_aprueba_la_solicitud_sin_exigir_gastos(api: TestClient, sesion: Session) -> None:
     # Etapa SOLICITUD: RN-06/RN-21 (gastos) no aplica todavía (eso es de la legalización).
-    viatico = crear_viatico(sesion, modalidad=Modalidad.CON_SOLICITUD)
+    dueno = crear_usuario(sesion)
+    viatico = crear_viatico(
+        sesion,
+        usuario=dueno,
+        modalidad=Modalidad.CON_SOLICITUD,
+        firma_archivo_id=_firma(sesion, dueno).id,
+    )
     _, encabezados = _actor(sesion, Rol.ADMIN)
 
     respuesta = api.post(f"{URL}/{viatico.id}/aprobar", json={}, headers=encabezados)

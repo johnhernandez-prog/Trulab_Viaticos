@@ -101,6 +101,10 @@ class ViaticoCrearConSolicitud(BaseModel):
     requiere_gastos_viaje: bool = False
     comentarios: Comentarios | None = None
     trayectos: Annotated[list[TrayectoEntradaSchema], Field(min_length=1, max_length=5)]
+    # Archivos subidos antes con `POST /archivos` (propósitos `FIRMA` y `FORMATO_PRESTADOR`).
+    # Sin `firma_archivo_id` se toma la firma guardada en el perfil, si existe (RN-32).
+    firma_archivo_id: uuid.UUID | None = None
+    formato_adjunto_id: uuid.UUID | None = None
 
 
 class ViaticoCrearLegalizacionDirecta(BaseModel):
@@ -133,6 +137,13 @@ class ProyectoRefSalida(BaseModel):
     en_catalogo: bool
 
 
+class ArchivoRefSalida(BaseModel):
+    id: uuid.UUID
+    # `None` si el archivo no es visible para quien consulta (lo subió otro usuario, RLS).
+    nombre: str | None
+    mime_type: str | None
+
+
 class SolicitudSalida(BaseModel):
     proyecto: ProyectoRefSalida
     lider_proyecto: str
@@ -141,6 +152,8 @@ class SolicitudSalida(BaseModel):
     requiere_gastos_viaje: bool
     presupuesto_solicitado: Dinero | None
     comentarios: str | None
+    firma: ArchivoRefSalida | None
+    formato_adjunto: ArchivoRefSalida | None
     trayectos: list[TrayectoSalida]
 
 
@@ -226,6 +239,9 @@ class ViaticoEditar(BaseModel):
         None
     )
     recursos_propios: bool | None = None
+    # `null` quita el adjunto; otro id lo reemplaza (solo en la etapa SOLICITUD).
+    firma_archivo_id: uuid.UUID | None = None
+    formato_adjunto_id: uuid.UUID | None = None
 
 
 # --- acciones de la máquina de estados (S2-05) ----------------------------------------------------

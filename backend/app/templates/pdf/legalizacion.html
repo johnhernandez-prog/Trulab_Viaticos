@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_comunes.html" as c %}
+{% block titulo %}Legalización de gastos{% endblock %}
+{% block pie %}Legalización de gastos{% endblock %}
+{% block nombre_documento %}Legalización de gastos{% endblock %}
+{% block contenido %}
+<table class="datos">
+  <tr><td class="k">Modalidad</td><td>{{ modalidad }}</td><td class="k">Fecha de creación</td><td>{{ creado | fecha }}</td></tr>
+  <tr><td class="k">Estado operativo</td><td>{{ estado }}</td><td class="k">Estado financiero</td><td>{{ estado_financiero }}</td></tr>
+</table>
+
+<h2>Datos del viajero</h2>
+{{ c.colaborador_tabla(colaborador) }}
+
+<h2>Viaje</h2>
+<table class="datos">
+  <tr><td class="k">Motivo del viaje</td><td colspan="3">{{ motivo }}</td></tr>
+  {% if proyecto %}
+  <tr><td class="k">Proyecto (solicitud)</td><td>{{ proyecto.nombre }}{% if not proyecto.en_catalogo %} <em>(escrito con «Otro»)</em>{% endif %}</td>
+      <td class="k">Líder del proyecto</td><td>{{ lider }}</td></tr>
+  {% endif %}
+  {% if recursos_propios %}
+  <tr><td class="k">Recursos propios</td><td colspan="3">Sí: el viajero asumió los gastos con recursos propios; no hubo valor transferido.</td></tr>
+  {% endif %}
+</table>
+
+<h2>Gastos</h2>
+{% if gastos %}
+<table>
+  <thead><tr><th>Fecha</th><th>Empresa</th><th>CC / NIT</th><th>Proyecto</th><th>Rubro</th><th>Concepto</th><th class="num">Valor</th></tr></thead>
+  <tbody>
+  {% for g in gastos %}
+    <tr><td>{{ g.fecha | fecha }}</td><td>{{ g.empresa or "—" }}</td><td>{{ g.cc_nit or "—" }}</td>
+        <td>{{ g.proyecto }}{% if not g.en_catalogo %} <em>(Otro)</em>{% endif %}</td><td>{{ g.rubro }}</td>
+        <td>{{ g.concepto }}</td><td class="num">{{ g.valor | cop }}</td></tr>
+  {% endfor %}
+    <tr class="total"><td colspan="6">Total de gastos ({{ gastos | length }})</td><td class="num">{{ liquidacion.total_gastos | cop }}</td></tr>
+  </tbody>
+</table>
+{% else %}
+<p class="nota">No hay gastos registrados.</p>
+{% endif %}
+
+<h2>Liquidación financiera</h2>
+<table class="datos" style="break-inside: avoid">
+  {% if liquidacion.presupuesto_solicitado is not none %}
+  <tr><td class="k">Presupuesto solicitado (referencia)</td><td class="num">{{ liquidacion.presupuesto_solicitado | cop }}</td></tr>
+  {% endif %}
+  <tr><td class="k">Valor asignado</td><td class="num">{{ liquidacion.valor_asignado | cop }}</td></tr>
+  <tr><td class="k">Valor transferido</td><td class="num">{{ liquidacion.valor_transferido | cop }}{% if recursos_propios %} (recursos propios){% endif %}</td></tr>
+  <tr><td class="k">Total de gastos</td><td class="num">{{ liquidacion.total_gastos | cop }}</td></tr>
+  <tr class="total"><td class="k">Saldo (transferido − gastos)</td>
+      <td class="num saldo {{ liquidacion.clase }}">{{ liquidacion.saldo | cop }} — {{ liquidacion.sentido }}</td></tr>
+</table>
+
+<h2>Responsables</h2>
+<table class="datos" style="break-inside: avoid">
+  <tr><td class="k">Creó</td><td>{{ responsables.creo }}</td></tr>
+  <tr><td class="k">Aprobó (operativo)</td><td>{{ responsables.aprobo }}</td></tr>
+  <tr><td class="k">Liquidó (financiero)</td><td>{{ responsables.liquido }}</td></tr>
+</table>
+
+{{ c.trazabilidad(eventos, "Sin eventos registrados.") }}
+{% endblock %}

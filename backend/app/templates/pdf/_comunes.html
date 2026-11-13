@@ -1,0 +1,24 @@
+{% macro colaborador_tabla(c) %}
+<table class="datos">
+  <tr><td class="k">Nombre</td><td>{{ c.nombre }}</td><td class="k">Cédula</td><td>{{ c.cedula or "—" }}</td></tr>
+  <tr><td class="k">Cargo</td><td>{{ c.cargo or "—" }}</td><td class="k">Célula</td><td>{{ c.celula or "—" }}</td></tr>
+  <tr><td class="k">Vinculación</td><td>{{ c.vinculacion }}</td>
+      <td class="k">Fecha de nacimiento</td><td>{{ (c.fecha_nacimiento | fecha) if c.fecha_nacimiento else "—" }}</td></tr>
+</table>
+{% endmacro %}
+
+{% macro trazabilidad(eventos, vacio) %}
+<h2>Trazabilidad</h2>
+{% if eventos %}
+<table>
+  <thead><tr><th style="width:17%">Fecha</th><th style="width:20%">Acción</th><th style="width:20%">Usuario</th><th>Detalle</th></tr></thead>
+  <tbody>
+  {% for e in eventos %}
+    <tr><td>{{ e.fecha | fecha_hora }}</td><td>{{ e.accion }}</td><td>{{ e.usuario }}</td><td>{{ e.detalle }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="nota">{{ vacio }}</p>
+{% endif %}
+{% endmacro %}
