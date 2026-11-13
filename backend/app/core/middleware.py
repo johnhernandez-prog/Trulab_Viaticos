@@ -55,3 +55,33 @@ class RequestIdMiddleware:
                     "duration_ms": round((time.perf_counter() - inicio) * 1000, 1),
                 },
             )
+
+
+class LimiteCuerpoAdjuntosMiddleware:
+    """Rechaza con `413 ARCHIVO_MUY_GRANDE` una subida cuyo `Content-Length` ya excede el límite
+    (docs/api-design.md §8), **antes** de que FastAPI lea y analice el multipart (que ocurre
+    antes que cualquier dependencia de la ruta). Una subida sin `Content-Length` (chunked) la
+    acota igual la lectura con límite del router."""
+
+    def __init__(self, app: ASGIApp, *, rutas: frozenset[str], limite_bytes: int) -> None:
+        self.app = app
+        self.rutas = rutas
+        self.limite_bytes = limite_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["method"] == "POST" and scope["path"] in self.rutas:
+            longitud = dict(scope["headers"]).get(b"content-length", b"").decode("latin-1")
+            if longitud.isdigit() and int(longitud) > self.limite_bytes:
+                from starlette.requests import Request
+
+                from app.core.errors import problema
+
+                respuesta = problema(
+                    Request(scope),
+                    413,
+                    "ARCHIVO_MUY_GRANDE",
+                    "El archivo supera el tamaño máximo permitido",
+                )
+                await respuesta(scope, receive, send)
+                return
+        await self.app(scope, receive, send)

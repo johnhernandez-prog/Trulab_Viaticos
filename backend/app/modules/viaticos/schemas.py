@@ -14,7 +14,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.core.enums import EstadoFinanciero, EstadoOperativo, Etapa, Modalidad
-from app.core.types import Dinero
+from app.core.types import Dinero, DineroNoNegativo
 from app.modules.auth.schemas import Referencia
 
 Motivo = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
@@ -237,4 +237,37 @@ class AccionEntrada(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    comentario: Comentario | None = None
+
+
+# --- tiquetes y dinero (S2-07) --------------------------------------------------------------------
+
+Referencia200 = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+class GestionarTiquetesEntrada(BaseModel):
+    """S-10: registro de la emisión de tiquetes; comentario y referencia opcionales."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comentario: Comentario | None = None
+    referencia: Referencia200 | None = None
+
+
+class ValorAsignadoEntrada(BaseModel):
+    """RN-19: lo registra FINANCIERO/SUPERADMIN; `>= 0` (RN-08). `valor_transferido` no se
+    acepta nunca: lo calcula la BD (RN-14)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    valor_asignado: DineroNoNegativo
+    comentario: Comentario | None = None
+
+
+class EstadoFinancieroEntrada(BaseModel):
+    """S-03: se envía el estado destino; las transiciones válidas las decide el service."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    estado_financiero: EstadoFinanciero
     comentario: Comentario | None = None

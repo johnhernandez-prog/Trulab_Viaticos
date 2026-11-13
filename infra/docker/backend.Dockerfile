@@ -19,6 +19,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 1000 app
+# Carpeta de STORAGE_BACKEND=local (volumen `api-storage`): de `app`, para que un volumen nuevo
+# herede ese dueño (Docker copia el dueño de la imagen al crearlo). Sin esto, la API —que corre
+# como `app`— no puede escribir los archivos subidos (S2-06).
+RUN mkdir -p /data/storage && chown app:app /data/storage
 WORKDIR /app
 
 # --- dev: dependencias de desarrollo; el código se monta como volumen ----------------------

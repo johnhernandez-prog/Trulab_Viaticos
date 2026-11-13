@@ -85,7 +85,7 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 4. **Dinero:** `NUMERIC(14,2)` en BD y *string* en JSON. Moneda COP.
 5. **PK UUID** más folio legible (`VT-000001`, `CA-000001`); el `VT-` no cambia de la solicitud a la legalización.
 6. **Eliminación lógica** (`deleted_at`); los usuarios se desactivan, no se borran.
-7. **Archivos** (soportes, firmas, formatos de prestador) en un bucket **S3** privado, validados por *magic bytes*, máximo 10 MB, servidos con URL prefirmada de 5 min.
+7. **Archivos** (soportes, firmas, formatos de prestador) en un bucket **S3** privado, validados por *magic bytes*, máximo 10 MB, servidos con URL prefirmada de 5 min. Se suben primero (`POST /archivos`, S2-06) y gastos/firma los referencian por id; en local, la API firma la URL (`/archivos/contenido?token=`).
 8. **Contraseñas** solo para operativos (Argon2id); respuestas de login que no revelan si el usuario existe; tokens de recuperación solo como hash; `password_hash` nunca sale por la API ni a logs.
 9. El backend siempre corre en Docker (por WeasyPrint y la paridad con producción).
 
@@ -135,6 +135,8 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 **S2-04a terminada** (2026-11-13): cálculo tarifario puro (`app/modules/viaticos/calculo.py`, RN-29/RN-30) con `POST /viaticos/calcular-presupuesto`; `POST /viaticos` en las dos modalidades (ADR-029, unión discriminada por `modalidad`, instantánea del colaborador y de tarifas, evento `CREAR`); `GET /viaticos/{id}` (alcance por dueño vía RLS, no en el `WHERE`). Adelanta una parte de S2-05 por decisión del dueño del producto; la máquina de estados queda para S2-04b/S2-05. **728 pruebas** en verde (20 de cálculo puro + 45 de la API). **Próxima: S2-04b/S2-05 (`transicionar()`: aprobar, rechazar, devolver, gestionar tiquetes, habilitar legalización; `PATCH`/`DELETE`; gastos; PDF)**.
 
 **S2-04b/S2-05 terminada** (2026-11-13): `GET /viaticos` (listado paginado, filtros, orden fijo `-created_at`, resumen financiero de `v_viatico_saldos`, `acciones_permitidas`); `PATCH`/`DELETE` solo dueño o SUPERADMIN en `PENDIENTE`/`PENDIENTE` (RN-09/S-05, recalcula el presupuesto solo si cambia lo que afecta el cálculo); `transicionar()` (bloqueo `FOR UPDATE`, evento en la misma transacción) con `aprobar` (RN-06/RN-21 en `LEGALIZACION`, `409 COMPROBANTE_FALTANTE`), `rechazar`, `devolver` (RN-20) y `habilitar-legalizacion` (RN-28); RN-27 con código propio `403 AUTOAPROBACION_NO_PERMITIDA` (antes `SIN_PERMISO` en el contrato) y auditoría `AUTOAPROBACION_SUPERADMIN` para la excepción de SUPERADMIN. Nuevo `app/modules/viaticos/acciones.py` (función pura, 24 pruebas). **834 pruebas** en verde. Pendiente, fuera de este alcance (depende de gastos/archivos): `valor-asignado`, `estado-financiero`, `gestionar-tiquetes`, firma/formato adjunto, PDF.
+
+**S2-06/S2-07 terminada** (2026-11-13): `app/modules/archivos` (tipo por *magic bytes* por propósito, `AlmacenamientoLocal`/`AlmacenamientoS3`, `POST /archivos`, URL temporal de 5 min, `/me/firma`), `app/modules/gastos` (CRUD JSON en `/viaticos/{id}/gastos`, adjuntos por id, 1:1, eventos `REGISTRAR_GASTO`/`EDITAR_GASTO`/`ELIMINAR_GASTO`, migración `3b9e51c0d2a4`) y `gestionar-tiquetes`, `valor-asignado`, `estado-financiero` con `LIQUIDAR`. **1050 pruebas** en verde. Pendiente: firma/formato del viático (RN-32/RN-33 al aprobar), PDF, `/pagos`, UI.
 
 ## Cómo retomar
 

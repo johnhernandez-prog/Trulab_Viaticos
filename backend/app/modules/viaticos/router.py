@@ -1,6 +1,7 @@
 """Rutas de `/viaticos` (docs/api-design.md §5.4): cálculo tarifario, creación en ambas
 modalidades, listado paginado, edición/eliminación en `PENDIENTE` y la máquina de estados
-operativa (`aprobar`, `rechazar`, `devolver`, `habilitar-legalizacion`).
+operativa (`aprobar`, `rechazar`, `devolver`, `habilitar-legalizacion`) y, desde S2-07, los
+tiquetes y el dinero (`gestionar-tiquetes`, `valor-asignado`, `estado-financiero`).
 """
 
 import uuid
@@ -18,7 +19,10 @@ from app.modules.viaticos.schemas import (
     AccionEntrada,
     CalcularPresupuestoEntrada,
     CalculoPresupuestoSalida,
+    EstadoFinancieroEntrada,
+    GestionarTiquetesEntrada,
     TrayectoSalida,
+    ValorAsignadoEntrada,
     ViaticoCrear,
     ViaticoDetalle,
     ViaticoEditar,
@@ -35,6 +39,13 @@ Lector = Annotated[Autenticado, Depends(require_permission(Permiso.VIATICOS_LEER
 Aprobador = Annotated[Autenticado, Depends(require_permission(Permiso.VIATICOS_APROBAR))]
 Rechazador = Annotated[Autenticado, Depends(require_permission(Permiso.VIATICOS_RECHAZAR))]
 Devolvedor = Annotated[Autenticado, Depends(require_permission(Permiso.VIATICOS_DEVOLVER))]
+Tiquetes = Annotated[Autenticado, Depends(require_permission(Permiso.VIATICOS_GESTIONAR_TIQUETES))]
+Tesorero = Annotated[
+    Autenticado, Depends(require_permission(Permiso.VIATICOS_REGISTRAR_VALOR_ASIGNADO))
+]
+Liquidador = Annotated[
+    Autenticado, Depends(require_permission(Permiso.VIATICOS_CAMBIAR_ESTADO_FINANCIERO))
+]
 Habilitador = Annotated[
     Autenticado, Depends(require_permission(Permiso.VIATICOS_HABILITAR_LEGALIZACION))
 ]
@@ -173,4 +184,55 @@ def habilitar_legalizacion(
     viatico_id: uuid.UUID, autenticado: Habilitador, session: DB
 ) -> ViaticoDetalle:
     viatico = service.habilitar_legalizacion(session, viatico_id, autenticado.usuario)
+    return service.detalle(session, viatico, autenticado.usuario)
+
+
+@router.post(
+    "/{viatico_id}/gestionar-tiquetes",
+    summary="Registrar la gestión de tiquetes de una solicitud aprobada (ADMIN, SUPERADMIN; S-10)",
+)
+def gestionar_tiquetes(
+    viatico_id: uuid.UUID,
+    datos: GestionarTiquetesEntrada,
+    autenticado: Tiquetes,
+    session: DB,
+    ctx: Ctx,
+) -> ViaticoDetalle:
+    viatico = service.gestionar_tiquetes(
+        session, viatico_id, autenticado.usuario, datos.comentario, datos.referencia, ctx
+    )
+    return service.detalle(session, viatico, autenticado.usuario)
+
+
+@router.patch(
+    "/{viatico_id}/valor-asignado",
+    summary="Registrar el valor asignado (FINANCIERO, SUPERADMIN; RN-14, RN-19, RN-27)",
+)
+def valor_asignado(
+    viatico_id: uuid.UUID,
+    datos: ValorAsignadoEntrada,
+    autenticado: Tesorero,
+    session: DB,
+    ctx: Ctx,
+) -> ViaticoDetalle:
+    viatico = service.registrar_valor_asignado(
+        session, viatico_id, autenticado.usuario, datos.valor_asignado, datos.comentario, ctx
+    )
+    return service.detalle(session, viatico, autenticado.usuario)
+
+
+@router.post(
+    "/{viatico_id}/estado-financiero",
+    summary="Cambiar el estado financiero y liquidar (FINANCIERO, SUPERADMIN; RN-03, RN-27)",
+)
+def estado_financiero(
+    viatico_id: uuid.UUID,
+    datos: EstadoFinancieroEntrada,
+    autenticado: Liquidador,
+    session: DB,
+    ctx: Ctx,
+) -> ViaticoDetalle:
+    viatico = service.cambiar_estado_financiero(
+        session, viatico_id, autenticado.usuario, datos.estado_financiero, datos.comentario, ctx
+    )
     return service.detalle(session, viatico, autenticado.usuario)

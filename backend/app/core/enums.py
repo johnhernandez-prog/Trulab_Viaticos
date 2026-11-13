@@ -69,6 +69,10 @@ class AccionViatico(StrEnum):
     CAMBIAR_RECURSOS_PROPIOS = "CAMBIAR_RECURSOS_PROPIOS"
     LIQUIDAR = "LIQUIDAR"
     ELIMINAR = "ELIMINAR"
+    # Gastos de la legalización (S2-06): el historial del viático registra cada cambio.
+    REGISTRAR_GASTO = "REGISTRAR_GASTO"
+    EDITAR_GASTO = "EDITAR_GASTO"
+    ELIMINAR_GASTO = "ELIMINAR_GASTO"
 
 
 class DimensionEvento(StrEnum):

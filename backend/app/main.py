@@ -7,11 +7,13 @@ from app.core import health
 from app.core.config import get_settings
 from app.core.errors import registrar_manejadores
 from app.core.logs import configurar_logging
-from app.core.middleware import RequestIdMiddleware
+from app.core.middleware import LimiteCuerpoAdjuntosMiddleware, RequestIdMiddleware
+from app.modules.archivos import router as archivos
 from app.modules.auditoria import router as auditoria
 from app.modules.auth import router as auth
 from app.modules.cargos import router as cargos
 from app.modules.catalogos import router as catalogos
+from app.modules.gastos import router as gastos
 from app.modules.usuarios import router as usuarios
 from app.modules.viaticos import router as viaticos
 
@@ -31,6 +33,13 @@ def create_app() -> FastAPI:
         docs_url=f"{API_PREFIX}/docs" if docs else None,
         redoc_url=None,
     )
+    # Interno respecto de RequestIdMiddleware (el último agregado es el externo): el 413 temprano
+    # sale con su X-Request-ID. Margen de 1 MB para los encabezados del multipart (§8: 11 MB).
+    app.add_middleware(
+        LimiteCuerpoAdjuntosMiddleware,
+        rutas=frozenset({f"{API_PREFIX}/archivos"}),
+        limite_bytes=(settings.max_upload_mb + 1) * 1024 * 1024,
+    )
     app.add_middleware(RequestIdMiddleware)
     registrar_manejadores(app)
 
@@ -41,6 +50,9 @@ def create_app() -> FastAPI:
     app.include_router(cargos.router, prefix=API_PREFIX)
     app.include_router(catalogos.router, prefix=API_PREFIX)
     app.include_router(viaticos.router, prefix=API_PREFIX)
+    app.include_router(gastos.router, prefix=API_PREFIX)
+    app.include_router(archivos.router, prefix=API_PREFIX)
+    app.include_router(archivos.router_firma, prefix=API_PREFIX)
     app.include_router(auditoria.router, prefix=API_PREFIX)
     if settings.env == "local":
         # Login de SUPERADMIN sin OAuth Client ID (R1.1). Fuera de local la ruta no existe (404).

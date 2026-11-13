@@ -70,7 +70,7 @@ Acceso **híbrido**: usuario y contraseña para `VIAJERO`, `ADMIN` y `FINANCIERO
 | `tarifas:leer` | F A S (los demás, solo vía preview) |
 | `indicadores:leer` | F A S |
 
-- **Sin autoaprobación** (RN-27): `aprobar`, `rechazar`, `devolver`, `gestionar-tiquetes`, `estado-financiero` y `valor-asignado` sobre un viático **creado por el propio usuario**, en **cualquier etapa**, responden `403` para ADMIN y FINANCIERO (`aprobar`/`rechazar`/`devolver`: código `AUTOAPROBACION_NO_PERMITIDA`, S2-05; el resto, pendiente, usará el mismo código). Solo SUPERADMIN puede, y cada uso se audita (`AUTOAPROBACION_SUPERADMIN`).
+- **Sin autoaprobación** (RN-27): `aprobar`, `rechazar`, `devolver`, `gestionar-tiquetes`, `estado-financiero` y `valor-asignado` sobre un viático **creado por el propio usuario**, en **cualquier etapa**, responden `403 AUTOAPROBACION_NO_PERMITIDA` para ADMIN y FINANCIERO (S2-05 y S2-07), con un `detail` específico por acción. Solo SUPERADMIN puede, y cada uso se audita (`AUTOAPROBACION_SUPERADMIN`, con `datos.accion` desde S2-07).
 
 ## 5. Recursos y endpoints previstos
 
@@ -87,7 +87,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | POST | `/usuarios/{id}/desactivar` | A S | No a uno mismo (`409 ACCION_SOBRE_SI_MISMO`); idempotente; `409 ULTIMO_SUPERADMIN` si es el último SUPERADMIN activo; desactivar un SUPERADMIN solo S. Revoca sesiones |
 | POST | `/usuarios/{id}/activar` | A S | |
 | POST | `/usuarios/{id}/restablecer-password` | A S | Solo operativos: genera una contraseña temporal nueva, la envía por correo, `debe_cambiar_password = true`, revoca sesiones, audita `PASSWORD_CAMBIADA`. Sobre un SUPERADMIN → `409 SUPERADMIN_SIN_PASSWORD` |
-| GET/PUT/DELETE | `/me/firma` | V F A S | Sube (multipart, imagen), consulta (URL firmada) o quita la firma del perfil (RN-32) |
+| GET/PUT/DELETE | `/me/firma` | V F A S | **Implementado en S2-06.** `PUT {archivo_id}`: guarda como firma del perfil un archivo **propio** subido antes con `POST /archivos` y `proposito = FIRMA` (otro propósito → `415`; ajeno o inexistente → `422`). `GET` → `{archivo_id, url, expires_at, mime_type, nombre}` (URL temporal) o `404` si no tiene. `DELETE` → `204` (el archivo no se borra: es inmutable) (RN-32) |
 | PATCH | `/me` | V F A S | Solo `fecha_nacimiento` (RN-31) |
 
 **Implementado en S1-10.** Detalles del contrato:
@@ -172,9 +172,9 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | POST | `/viaticos/{id}/aprobar` | **A S** | Exige `estado = PENDIENTE`. Etapa `LEGALIZACION`: RN-06/RN-21 (≥1 gasto activo y todos con `soporte_id` o `archivo_id`, si no `409 COMPROBANTE_FALTANTE`). RN-27: sobre el propio viático, `403 AUTOAPROBACION_NO_PERMITIDA` (ADMIN) o permitido y auditado (`AUTOAPROBACION_SUPERADMIN`, solo SUPERADMIN) |
 | POST | `/viaticos/{id}/rechazar` | **A S** | `PENDIENTE → RECHAZADO` (final). `{comentario}` obligatorio (`422 COMENTARIO_REQUERIDO`); RN-27 igual que aprobar |
 | POST | `/viaticos/{id}/devolver` | **A S** | `PENDIENTE`/`APROBADO` → `PENDIENTE` si `estado_financiero` no es `PAGADO` ni `PROCESADO` (RN-20); `{comentario}` obligatorio; RN-27 igual que aprobar |
-| POST | `/viaticos/{id}/gestionar-tiquetes` | **A S** | `{comentario}`; solo si `requiere_tiquete`; evento `GESTIONAR_TIQUETES` (S-10). Pendiente |
-| PATCH | `/viaticos/{id}/valor-asignado` | **F S** | `{valor_asignado, comentario?}`. El servidor recalcula `valor_transferido` (RN-14) y registra `EDITAR_VALOR_ASIGNADO`. `presupuesto_solicitado` se muestra como referencia sugerida. ADMIN y VIAJERO → 403. Pendiente |
-| POST | `/viaticos/{id}/estado-financiero` | **F S** | `{estado_financiero, comentario?}`. `PAGADO`/`PROCESADO` exigen RN-03 (etapa `LEGALIZACION`, `APROBADO`, comprobantes). Registra `CAMBIAR_ESTADO_FINANCIERO` y, al liquidar, `LIQUIDAR` con el sentido (reintegro / reembolso). Pendiente |
+| POST | `/viaticos/{id}/gestionar-tiquetes` | **A S** | `{comentario?, referencia?}`; solo `CON_SOLICITUD` con `requiere_tiquete`, etapa `SOLICITUD` y `estado = APROBADO` (si no, `409 TRANSICION_INVALIDA`); RN-27; repetible; evento `GESTIONAR_TIQUETES` (S-10) |
+| PATCH | `/viaticos/{id}/valor-asignado` | **F S** | `{valor_asignado (>= 0), comentario?}`. Exige `estado = APROBADO`, sin `recursos_propios` y sin liquidar (`409 TRANSICION_INVALIDA`); RN-27. La BD recalcula `valor_transferido` (RN-14); evento `EDITAR_VALOR_ASIGNADO` con antes/después y `presupuesto_solicitado` como referencia. ADMIN y VIAJERO → 403 |
+| POST | `/viaticos/{id}/estado-financiero` | **F S** | `{estado_financiero, comentario?}`. Solo hacia adelante y con `estado = APROBADO`. `TRANSFERIDO` exige `valor_asignado > 0` y sin recursos propios; `PAGADO`/`PROCESADO` exigen RN-03 (etapa `LEGALIZACION`, gastos con comprobante). Registra `CAMBIAR_ESTADO_FINANCIERO` y, al liquidar, `LIQUIDAR` con el sentido (`REINTEGRO` / `REEMBOLSO` / `SIN_SALDO`) |
 | POST | `/viaticos/{id}/habilitar-legalizacion` | dueño, S | Solo `CON_SOLICITUD`, etapa `SOLICITUD`, `estado = APROBADO` y, si `requiere_gastos_viaje`, `estado_financiero = TRANSFERIDO` (RN-28); si no, `409 LEGALIZACION_NO_HABILITABLE`. Pasa a etapa `LEGALIZACION`, `estado = PENDIENTE`, conserva `estado_financiero` y `valor_asignado` (S-12) |
 | GET | `/viaticos/{id}/eventos` | dueño, F A S | Historial de las tres dimensiones. Por ahora va embebido en `GET /viaticos/{id}` (`eventos[]`); la ruta propia queda para cuando el historial crezca |
 | GET | `/viaticos/{id}/pdf-solicitud` | dueño, F A S | `application/pdf` con la firma incrustada; solo `CON_SOLICITUD` y con firma (RN-32). `Content-Disposition: attachment; filename="VT-000123-solicitud.pdf"`. Pendiente |
@@ -182,7 +182,7 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 
 `estado-financiero` recibe el valor destino (S-03), pero sigue siendo una acción con permiso, validaciones e historial a través de `transicionar()`.
 
-**Implementado en S2-04a** (cálculo tarifario, creación en ambas modalidades, `GET /viaticos/{id}`) **y S2-04b/S2-05** (listado, edición/eliminación en `PENDIENTE` y la máquina de estados operativa). Quedan pendientes, para cuando lleguen los gastos y los archivos: `firma`/`formato-adjunto`, `valor-asignado`, `estado-financiero`, `gestionar-tiquetes` y los PDF. Detalles del contrato:
+**Implementado en S2-04a** (cálculo tarifario, creación en ambas modalidades, `GET /viaticos/{id}`), **S2-04b/S2-05** (listado, edición/eliminación en `PENDIENTE` y la máquina de estados operativa) **y S2-06/S2-07** (`gestionar-tiquetes`, `valor-asignado`, `estado-financiero` con la liquidación). Quedan pendientes: `firma`/`formato-adjunto` del viático y los PDF. Detalles del contrato:
 
 - `POST /viaticos/calcular-presupuesto` (`viaticos:calcular_presupuesto`, V F A S): cuerpo `{proyecto_id | proyecto_otro, requiere_gastos_viaje, trayectos: [{orden, ciudad_origen, ciudad_destino, fecha_ida, fecha_regreso, requiere_hospedaje, dias_estadia}]}` (1–5, `extra="forbid"`: el cliente no puede enviar tarifas ni totales). `aplica = false` con `motivo_no_aplica` en `SIN_GASTOS_VIAJE` (si `requiere_gastos_viaje = false`) o `FORMATO_PRESTADOR` (prestador + proyecto con `exige_formato_prestador = true`, RN-33); en ambos casos `trayectos[].*` tarifario sale en `null` y `presupuesto_solicitado = null`. Si aplica, cada trayecto trae su instantánea (`vr_alimentacion`, `otros_gastos`, `trans_interno` ya resuelto por `dias_estadia`, `transporte_aeropuerto`, `transporte_intermunicipal`, `subtotal_estadia`, todos `Dinero`) y `presupuesto_solicitado` es la suma (RN-29). Ningún proyecto, ningún proyecto_id+proyecto_otro juntos, 0 o más de 5 trayectos, destino = origen (salvo "Otro"), regreso < ida o días < 1 → `422 PROYECTO_REQUERIDO` / `PROYECTO_AMBIGUO` / `VALIDACION` / `TRAYECTOS_INVALIDOS`; una ciudad de destino sin tarifa activa para el tipo del usuario → `422 VALOR_NO_PERMITIDO`.
 - `POST /viaticos` (`viaticos:crear`, V F A S) es una unión discriminada por `modalidad`: el cuerpo de `CON_SOLICITUD` (con `trayectos`, `proyecto_id | proyecto_otro`, `lider_proyecto`) y el de `LEGALIZACION_DIRECTA` (solo `motivo_viaje`, `recursos_propios?`) no comparten campos; enviar `proyecto_id`, `trayectos` o `recursos_propios` en la modalidad que no les corresponde → `422 VALIDACION` (`extra="forbid"`). `CON_SOLICITUD` usa la misma función que la vista previa para calcular y guardar la instantánea de cada `viatico_trayectos`; `requiere_tiquete = true` sin `fecha_nacimiento` en el perfil → `422 FECHA_NACIMIENTO_REQUERIDA` (RN-31). La instantánea del colaborador (RN-17: nombre, cargo, célula por nombre, tipo de vinculación, cédula, fecha de nacimiento) se copia del usuario autenticado. El evento inicial `CREAR` se inserta en `viatico_eventos` en la misma transacción.
@@ -191,25 +191,31 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 - **`acciones_permitidas`** (`app/modules/viaticos/acciones.py`, función pura): `editar`/`eliminar` (dueño o SUPERADMIN, `PENDIENTE`/`PENDIENTE`); `aprobar`/`rechazar` (ADMIN/SUPERADMIN, `PENDIENTE`, RN-27); `devolver` (ADMIN/SUPERADMIN, `PENDIENTE`/`APROBADO` sin `PAGADO`/`PROCESADO`, RN-27); `habilitar_legalizacion` (dueño o SUPERADMIN, `CON_SOLICITUD`/`SOLICITUD`/`APROBADO`, RN-28); `gestionar_gastos` (dueño o SUPERADMIN, etapa `LEGALIZACION`, `PENDIENTE`). Así el frontend muestra u oculta botones sin repetir las reglas.
 - **`PATCH /viaticos/{id}`** (dueño o SUPERADMIN; `409 NO_EDITABLE` fuera de `PENDIENTE`/`PENDIENTE`, RN-09/S-05): en etapa `SOLICITUD` acepta los campos de la cabecera y `trayectos` (reemplazo completo); enviar `recursos_propios` aquí → `422 VALOR_NO_PERMITIDO`. En etapa `LEGALIZACION` solo `motivo_viaje`/`comentarios` (y `recursos_propios` si es `LEGALIZACION_DIRECTA`); `trayectos`/`proyecto_*` → `422 VALOR_NO_PERMITIDO`. `proyecto_id`/`proyecto_otro`: enviar uno borra el otro si se envía sin el otro; enviar los dos en la misma petición valida la exclusividad tal cual (RN-16). El presupuesto se recalcula solo si cambian `proyecto_id`, `proyecto_otro`, `requiere_gastos_viaje` o `trayectos`.
 - **`DELETE /viaticos/{id}`**: igual alcance que `PATCH`; marca `deleted_at`, pone en cascada `deleted_at` en sus `gastos`, registra `ELIMINAR` en `viatico_eventos` y `VIATICO_ELIMINAR` en `auditoria` (RF-014, a diferencia de la creación).
-- **`transicionar()`** (`app/modules/viaticos/service.py`): núcleo común de `aprobar`/`rechazar`/`devolver`/`habilitar-legalizacion`: bloquea la fila (`SELECT … FOR UPDATE`), aplica la validación y el cambio de una función específica de cada acción, y registra el evento en `viatico_eventos`, todo en una sola transacción.
+- **`transicionar()`** (`app/modules/viaticos/service.py`): núcleo común de todas las acciones (`aprobar`/`rechazar`/`devolver`/`habilitar-legalizacion` y, desde S2-07, `gestionar-tiquetes`/`valor-asignado`/`estado-financiero`): bloquea la fila (`SELECT … FOR UPDATE`), aplica la validación y el cambio de una función específica de cada acción, y registra el evento en `viatico_eventos`, todo en una sola transacción. El `estado_anterior`/`estado_nuevo` del evento es el de su dimensión (`estado_financiero` para `FINANCIERO`); las acciones que no cambian estado (tiquetes, valor asignado) los dejan en `null`. Admite eventos adicionales en la misma transacción (`LIQUIDAR`).
+- **Estado financiero (S2-07):** orden `PENDIENTE → TRANSFERIDO → PAGADO → PROCESADO`, solo hacia adelante (repetir o retroceder → `409 TRANSICION_INVALIDA`); se pueden saltar pasos (S-03), p. ej. una legalización con recursos propios pasa de `PENDIENTE` a `PAGADO`. Siempre con `estado = APROBADO`. Marca `estado_financiero_at`. La primera llegada a `PAGADO` o `PROCESADO` registra además `LIQUIDAR` con `{valor_transferido, total_gastos, saldo, sentido}` (`v_viatico_saldos`; RN-02, RN-10).
+- **`acciones_permitidas` (S2-07):** suma `gestionar_tiquetes` (ADMIN/SUPERADMIN, RN-27), `registrar_valor_asignado` y `cambiar_estado_financiero` (FINANCIERO/SUPERADMIN, RN-27; el segundo solo si hay algún destino válido, `acciones.destinos_financieros()`).
+- **Dinero en `viatico_eventos.datos`:** siempre como string con 2 decimales (`"50000.00"`).
 - Auditoría: la creación y la edición **no** pasan por `auditoria` (reservada para accesos, contraseñas, roles, catálogos, RF-014); su historial es `viatico_eventos`, que sí ve la UI y el PDF. Solo `VIATICO_ELIMINAR` y `AUTOAPROBACION_SUPERADMIN` (RN-27) llegan a `auditoria`.
 
 ### 5.5 Gastos (subrecurso)
 
+**Implementado en S2-06.** Los adjuntos se suben antes con `POST /archivos` (§5.9) y el gasto los referencia por id; así las rutas de gastos son JSON y la validación de tipo vive en un solo lugar.
+
 | Método | Ruta | Roles | Notas |
 | :--- | :--- | :--- | :--- |
-| GET | `/viaticos/{id}/gastos` | dueño, F A S | `tiene_comprobante` por gasto (RN-21) |
-| POST | `/viaticos/{id}/gastos` | dueño (`etapa = LEGALIZACION`, `estado = PENDIENTE`) | `multipart/form-data`: `fecha_factura`, `rubro_id`, `proyecto_id` **o** `proyecto_otro`, `concepto`, `cc_nit?`, `empresa?`, `valor`, `observaciones?`, `soporte?` (**imagen**), `archivo?` (**PDF**). En etapa `SOLICITUD` → `409 ETAPA_INVALIDA` |
-| PATCH | `/gastos/{gasto_id}` | dueño (misma condición) | Sin archivos |
-| DELETE | `/gastos/{gasto_id}` | dueño (misma condición) | Lógico |
-| PUT | `/gastos/{gasto_id}/{tipo}` | dueño (misma condición) | `tipo` ∈ `soporte`, `archivo` |
-| DELETE | `/gastos/{gasto_id}/{tipo}` | dueño (misma condición) | Puede dejar el gasto sin comprobante |
-| GET | `/gastos/{gasto_id}/{tipo}` | dueño, F A S | `{url, expires_at, mime_type, nombre}`: URL **prefirmada de S3** de 5 min |
+| GET | `/viaticos/{id}/gastos` | dueño, F A S | Gastos activos (sin los eliminados), por `fecha_factura`; cada uno con `rubro {id, nombre}`, `proyecto {id, nombre, en_catalogo}`, `soporte`/`archivo` (`{id, nombre, mime_type}` o `null`) y `tiene_comprobante` (RN-21). Sin paginar |
+| GET | `/viaticos/{id}/gastos/{gasto_id}` | dueño, F A S | Detalle |
+| POST | `/viaticos/{id}/gastos` | dueño, S | `{fecha_factura, rubro_id, proyecto_id \| proyecto_otro, concepto, cc_nit?, empresa?, valor, observaciones?, soporte_id?, archivo_id?}` → `201` con `Location`. Evento `REGISTRAR_GASTO` |
+| PATCH | `/viaticos/{id}/gastos/{gasto_id}` | dueño, S | Solo lo enviado; `soporte_id`/`archivo_id` con otro id reemplazan el adjunto, en `null` lo quitan (el gasto puede quedar sin comprobante). `fecha_factura`, `rubro_id`, `concepto` y `valor` no admiten `null`. Evento `EDITAR_GASTO` con antes/después (si algo cambió) |
+| DELETE | `/viaticos/{id}/gastos/{gasto_id}` | dueño, S | Lógico (`deleted_at`) → `204`; el saldo se recalcula solo (`v_viatico_saldos`). Evento `ELIMINAR_GASTO` |
 
-- `rubro_id`/`proyecto_id` inexistente o inactivo → `422 VALOR_NO_PERMITIDO`.
+- **Alcance:** viático invisible (ajeno para un VIAJERO, inexistente o eliminado) → `404`; visible pero no es el dueño ni SUPERADMIN (ADMIN, FINANCIERO) → `403`. Un gasto de otro viático → `404`.
+- **Estado:** escribir exige etapa `LEGALIZACION` (si no, `409 ETAPA_INVALIDA`), `estado = PENDIENTE` y sin liquidar (`estado_financiero` ∉ {`PAGADO`, `PROCESADO`}); si no, `409 NO_EDITABLE`. **`TRANSFERIDO` se admite**: es el estado normal de una legalización `CON_SOLICITUD` con anticipo (S-12, docs/user-flows.md paso 5). Cada escritura bloquea el viático (`FOR UPDATE`): no compite con `aprobar`.
+- `rubro_id`/`proyecto_id` inexistente o inactivo → `422 VALOR_NO_PERMITIDO` con el campo.
 - **Proyecto híbrido (RN-16, ADR-031)**, en gastos y en la solicitud: se envía **exactamente uno** de `proyecto_id` (catálogo) o `proyecto_otro` (texto de 3 a 150 caracteres, se guarda recortado). Ninguno → `422 PROYECTO_REQUERIDO`; los dos → `422 PROYECTO_AMBIGUO`. Los `PATCH` siguen la misma regla: enviar uno borra el otro.
-- PDF en `soporte` o imagen en `archivo` → `415 TIPO_ARCHIVO_NO_PERMITIDO` (RN-13).
-- Las operaciones sobre un gasto usan `/gastos/{id}`; el acceso se valida a través de su viático.
+- `valor > 0` con máximo 2 decimales (RN-08) → si no, `422 VALIDACION`. `fecha_factura` futura (en hora de Colombia, UTC−5) → `422 VALOR_NO_PERMITIDO` con `errors[].code = FECHA_FUTURA` (RN-07). `cc_nit` es el NIT o la cédula del proveedor (hasta 30 caracteres).
+- **Adjuntos:** el archivo debe existir y haberlo subido quien registra el gasto (si no, `422 VALOR_NO_PERMITIDO`, sin revelar si existe); `soporte_id` con `proposito = SOPORTE` (imagen) y `archivo_id` con `proposito = ARCHIVO` (PDF); cualquier otro → `415 TIPO_ARCHIVO_NO_PERMITIDO` (RN-13). Soporte y archivo distintos (`422`). Un archivo pertenece a **un solo gasto**, aunque ese gasto se haya eliminado (lo exige el `UNIQUE` de la BD y así el gasto eliminado conserva su comprobante) → `409 EN_USO`.
+- El contenido de un adjunto se ve con `GET /archivos/{id}/url` (§5.9).
 
 ### 5.6 Pagos (modelo de lectura)
 
@@ -233,6 +239,21 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 ### 5.8 Auditoría (SUPERADMIN, post-MVP en la UI)
 
 `GET /auditoria?entidad&entidad_id&usuario_id&accion&desde&hasta` (**implementado en S1-10**, permiso `auditoria:leer`): paginado, más reciente primero; `desde`/`hasta` son fechas UTC inclusivas.
+
+### 5.9 Archivos (S2-06, ADR-028)
+
+| Método | Ruta | Roles | Notas |
+| :--- | :--- | :--- | :--- |
+| POST | `/archivos` | V F A S | `multipart/form-data`: `archivo` + `proposito` ∈ `SOPORTE`, `ARCHIVO`, `FIRMA`, `FORMATO_PRESTADOR` → `201 {id, nombre_original, mime_type, tamano_bytes, sha256, proposito, created_at}` con `Location`. Nunca devuelve la clave de almacenamiento |
+| GET | `/archivos/{id}` | quien lo subió, F A S | Metadatos |
+| GET | `/archivos/{id}/url` | quien lo subió, F A S | `{url, expires_at, mime_type, nombre}`: URL temporal de **5 min** (`SIGNED_URL_TTL_SECONDS`) |
+| GET | `/archivos/contenido?token=` | (token) | Solo `STORAGE_BACKEND=local`: sirve el contenido con un token firmado (con S3 → `404`) |
+
+- **Tipo por contenido** (*magic bytes*, `app/modules/archivos/deteccion.py`), nunca por extensión ni `Content-Type`: `SOPORTE` = JPEG, PNG, WEBP, HEIC; `ARCHIVO` = PDF; `FIRMA` = JPEG, PNG, WEBP; `FORMATO_PRESTADOR` = PDF, XLSX, XLS (RN-13, RN-32, RN-33). Ejecutables, SVG, HTML, ZIP genéricos, DOCX/DOC o cualquier otro → `415 TIPO_ARCHIVO_NO_PERMITIDO`. Vacío → `422`.
+- **Tamaño:** máximo `MAX_UPLOAD_MB` (10). Un `Content-Length` mayor que el límite + 1 MB se corta antes de leer el cuerpo (`LimiteCuerpoAdjuntosMiddleware`); el contenido se lee además con límite → `413 ARCHIVO_MUY_GRANDE`.
+- Se calcula el **SHA-256**; la clave es `{proposito}/{AAAA}/{MM}/{uuid}{ext}` (sin el nombre del cliente). El contenido se guarda **antes** que la fila (si la BD falla, queda un objeto huérfano, nunca una fila sin contenido). Archivos **inmutables**: reemplazar = subir otro.
+- **Alcance:** RLS de `archivos` (quien lo subió —`created_by`— o FINANCIERO/ADMIN/SUPERADMIN); lo ajeno → `404`.
+- **URL de lectura:** con S3, URL **prefirmada** de `get_object` (bucket privado, `ResponseContentType` y `ResponseContentDisposition: inline` forzados, subida con `ServerSideEncryption=AES256`). En local, la API firma un token (JWT HS256 con una clave **derivada** de `JWT_SECRET` y audiencia propia: no sirve como access token) con la clave, el tipo, el nombre y la expiración; así un `<img src>` funciona sin `Authorization`, igual que con S3. La respuesta lleva `X-Content-Type-Options: nosniff` y `Content-Security-Policy: default-src 'none'; sandbox`.
 
 ## 6. Convenciones de respuesta
 
@@ -304,11 +325,12 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 | :--- | :--- | :--- |
 | 400 | `SOLICITUD_INVALIDA` | JSON mal formado |
 | 401 | `NO_AUTENTICADO`, `TOKEN_EXPIRADO`, `CREDENCIALES_INVALIDAS` | Sin token, token inválido, o credenciales incorrectas (mensaje genérico) |
-| 403 | `SIN_PERMISO`, `USUARIO_INACTIVO`, `USUARIO_NO_REGISTRADO`, `DOMINIO_NO_PERMITIDO`, `METODO_ACCESO_NO_PERMITIDO`, `CAMBIO_PASSWORD_REQUERIDO`, `AUTOAPROBACION_NO_PERMITIDA` | RN-27 (`aprobar`/`rechazar`/`devolver` sobre el propio viático, ADMIN) con un código específico desde S2-05 (antes se documentaba como `SIN_PERMISO`); incluye también la falta de `X-Requested-With` en `refresh`/`logout` |
+| 403 | `SIN_PERMISO`, `USUARIO_INACTIVO`, `USUARIO_NO_REGISTRADO`, `DOMINIO_NO_PERMITIDO`, `METODO_ACCESO_NO_PERMITIDO`, `CAMBIO_PASSWORD_REQUERIDO`, `AUTOAPROBACION_NO_PERMITIDA` | RN-27 (`aprobar`/`rechazar`/`devolver`/`gestionar-tiquetes` sobre el propio viático, ADMIN; `valor-asignado`/`estado-financiero`, FINANCIERO) con un código específico desde S2-05 (antes se documentaba como `SIN_PERMISO`); incluye también la falta de `X-Requested-With` en `refresh`/`logout` |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente **o ajeno** |
 | 409 | `TRANSICION_INVALIDA`, `SOLICITUD_INCOMPLETA`, `LEGALIZACION_INCOMPLETA`, `LEGALIZACION_NO_HABILITABLE`, `COMPROBANTE_FALTANTE`, `ETAPA_INVALIDA`, `REQUIERE_APROBACION`, `EN_USO`, `DUPLICADO`, `NO_EDITABLE`, `ULTIMO_SUPERADMIN`, `SUPERADMIN_SIN_PASSWORD`, `ACCION_SOBRE_SI_MISMO` | Reglas de negocio o de estado. `COMPROBANTE_FALTANTE` (S2-05, RN-06/RN-21): al aprobar una legalización sin gastos o con alguno sin `soporte`/`archivo` |
+| 409 | `EN_USO` (adjuntos) | El archivo ya está adjunto a otro gasto (S2-06) |
 | 413 | `ARCHIVO_MUY_GRANDE` | Más de 10 MB |
-| 415 | `TIPO_ARCHIVO_NO_PERMITIDO` | Tipo no admitido o en el campo equivocado |
+| 415 | `TIPO_ARCHIVO_NO_PERMITIDO` | Tipo real (por contenido) no admitido para el propósito, o un archivo de otro propósito en `soporte_id`/`archivo_id`/firma |
 | 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `PROYECTO_REQUERIDO`, `PROYECTO_AMBIGUO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `PASSWORD_ACTUAL_INCORRECTA`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |
 | 429 | `DEMASIADAS_SOLICITUDES`, `CUENTA_BLOQUEADA_TEMPORALMENTE` | Límite en `/auth/*`; bloqueo por intentos |
 | 500 | `ERROR_INTERNO` | Sin detalles internos |

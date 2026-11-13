@@ -259,3 +259,124 @@ def test_no_se_gestionan_gastos_en_etapa_solicitud() -> None:
     )
 
     assert "gestionar_gastos" not in acciones.calcular(viatico, viajero)
+
+
+# --- tiquetes y dinero (S2-07) -------------------------------------------------------------------
+
+
+def _solicitud(dueno_id: uuid.UUID, **campos: object) -> Viatico:
+    valores: dict[str, object] = {
+        "modalidad": Modalidad.CON_SOLICITUD,
+        "etapa": Etapa.SOLICITUD,
+        "estado": EstadoOperativo.APROBADO,
+        "requiere_tiquete": True,
+        "recursos_propios": False,
+        "valor_asignado": 0,
+    }
+    valores.update(campos)
+    return _viatico(dueno_id, **valores)
+
+
+@pytest.mark.parametrize(("rol", "puede"), [(A, True), (S, True), (F, False), (V, False)])
+def test_gestionar_tiquetes_por_rol(rol: Rol, puede: bool) -> None:
+    viatico = _solicitud(uuid.uuid4())
+
+    assert ("gestionar_tiquetes" in acciones.calcular(viatico, _usuario(rol))) is puede
+
+
+@pytest.mark.parametrize(
+    "campos",
+    [
+        {"requiere_tiquete": False},
+        {"estado": EstadoOperativo.PENDIENTE},
+        {"etapa": Etapa.LEGALIZACION},
+    ],
+)
+def test_gestionar_tiquetes_solo_en_solicitud_aprobada_con_tiquete(
+    campos: dict[str, object],
+) -> None:
+    viatico = _solicitud(uuid.uuid4(), **campos)
+
+    assert "gestionar_tiquetes" not in acciones.calcular(viatico, _usuario(A))
+
+
+def test_admin_no_gestiona_tiquetes_de_lo_propio() -> None:
+    admin = _usuario(A)
+
+    assert "gestionar_tiquetes" not in acciones.calcular(_solicitud(admin.id), admin)
+
+
+@pytest.mark.parametrize(("rol", "puede"), [(F, True), (S, True), (A, False), (V, False)])
+def test_valor_asignado_por_rol(rol: Rol, puede: bool) -> None:
+    viatico = _solicitud(uuid.uuid4())
+
+    assert ("registrar_valor_asignado" in acciones.calcular(viatico, _usuario(rol))) is puede
+
+
+@pytest.mark.parametrize(
+    "campos",
+    [
+        {"estado": EstadoOperativo.PENDIENTE},
+        {"estado_financiero": EstadoFinanciero.PAGADO, "etapa": Etapa.LEGALIZACION},
+    ],
+)
+def test_valor_asignado_no_disponible(campos: dict[str, object]) -> None:
+    viatico = _solicitud(uuid.uuid4(), **campos)
+
+    assert "registrar_valor_asignado" not in acciones.calcular(viatico, _usuario(F))
+
+
+def test_valor_asignado_no_disponible_con_recursos_propios() -> None:
+    viatico = _viatico(uuid.uuid4(), estado=EstadoOperativo.APROBADO, recursos_propios=True)
+
+    assert "registrar_valor_asignado" not in acciones.calcular(viatico, _usuario(F))
+
+
+def test_financiero_no_toca_el_dinero_de_lo_propio() -> None:
+    financiero = _usuario(F)
+    viatico = _solicitud(financiero.id, valor_asignado=100)
+
+    resultado = acciones.calcular(viatico, financiero)
+
+    assert "registrar_valor_asignado" not in resultado
+    assert "cambiar_estado_financiero" not in resultado
+
+
+@pytest.mark.parametrize(
+    ("campos", "destinos"),
+    [
+        # Solicitud aprobada: solo transferir, y solo con valor asignado.
+        ({}, []),
+        ({"valor_asignado": 100}, [EstadoFinanciero.TRANSFERIDO]),
+        ({"estado": EstadoOperativo.PENDIENTE, "valor_asignado": 100}, []),
+        # Legalización aprobada: transferir (si hay valor) y liquidar.
+        (
+            {"etapa": Etapa.LEGALIZACION, "valor_asignado": 100},
+            [EstadoFinanciero.TRANSFERIDO, EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO],
+        ),
+        (
+            {"etapa": Etapa.LEGALIZACION, "estado_financiero": EstadoFinanciero.TRANSFERIDO},
+            [EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO],
+        ),
+        (
+            {"etapa": Etapa.LEGALIZACION, "estado_financiero": EstadoFinanciero.PAGADO},
+            [EstadoFinanciero.PROCESADO],
+        ),
+        ({"etapa": Etapa.LEGALIZACION, "estado_financiero": EstadoFinanciero.PROCESADO}, []),
+    ],
+)
+def test_destinos_financieros(campos: dict[str, object], destinos: list[EstadoFinanciero]) -> None:
+    viatico = _solicitud(uuid.uuid4(), **campos)
+
+    assert acciones.destinos_financieros(viatico) == destinos
+    puede = "cambiar_estado_financiero" in acciones.calcular(viatico, _usuario(F))
+    assert puede is bool(destinos)
+
+
+def test_recursos_propios_no_se_transfiere_pero_se_liquida() -> None:
+    viatico = _viatico(uuid.uuid4(), estado=EstadoOperativo.APROBADO, recursos_propios=True)
+
+    assert acciones.destinos_financieros(viatico) == [
+        EstadoFinanciero.PAGADO,
+        EstadoFinanciero.PROCESADO,
+    ]

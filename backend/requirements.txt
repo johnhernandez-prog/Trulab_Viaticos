@@ -13,5 +13,7 @@ PyJWT==2.10.1
 google-auth==2.40.3
 # Transporte HTTP de google-auth (descarga de las claves públicas de Google).
 requests==2.32.4
+# Subida de archivos multipart (S2-06): `UploadFile` de FastAPI.
+python-multipart==0.0.20
 # AWS (ADR-028): Amazon SES (correo) desde S1-08; Amazon S3 desde S2-07.
 boto3==1.38.46

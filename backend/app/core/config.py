@@ -42,8 +42,14 @@ class Settings(BaseSettings):
     # URL pública de la SPA: enlaces de los correos y CORS en producción.
     frontend_url: str = "http://localhost:5173"
     storage_backend: Literal["local", "s3"] = "local"
+    # Carpeta de los archivos con STORAGE_BACKEND=local (en Docker, el volumen `api-storage`).
+    storage_local_path: str = "./storage"
     aws_region: str = "us-east-1"
     aws_s3_bucket: str = ""
+    # Tamaño máximo por archivo (RN-13). No puede pasar de 10: la BD lo limita con un `CHECK`.
+    max_upload_mb: int = Field(default=10, ge=1, le=10)
+    # Vigencia de las URL de lectura de archivos (prefirmadas en S3; firmadas en local): 5 min.
+    signed_url_ttl_seconds: int = Field(default=300, ge=60, le=900)
 
     @model_validator(mode="after")
     def _validar_entorno(self) -> Self:

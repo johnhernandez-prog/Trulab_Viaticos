@@ -12,6 +12,8 @@ from app.modules.usuarios.models import Usuario
 from app.modules.viaticos.models import Viatico
 
 _ROLES_OPERATIVOS = frozenset({Rol.ADMIN, Rol.SUPERADMIN})
+_ROLES_FINANCIEROS = frozenset({Rol.FINANCIERO, Rol.SUPERADMIN})
+_LIQUIDADO = frozenset({EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO})
 _FINANCIERO_BLOQUEA_DEVOLVER = frozenset({EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO})
 
 
@@ -24,6 +26,30 @@ def _puede_operar(viatico: Viatico, actor: Usuario) -> bool:
     if actor.rol not in _ROLES_OPERATIVOS:
         return False
     return actor.rol == Rol.SUPERADMIN or viatico.usuario_id != actor.id
+
+
+def _puede_tesoreria(viatico: Viatico, actor: Usuario) -> bool:
+    """RN-26/RN-27: solo FINANCIERO/SUPERADMIN, y nunca sobre lo propio salvo SUPERADMIN."""
+    if actor.rol not in _ROLES_FINANCIEROS:
+        return False
+    return actor.rol == Rol.SUPERADMIN or viatico.usuario_id != actor.id
+
+
+def destinos_financieros(viatico: Viatico) -> list[EstadoFinanciero]:
+    """Estados financieros a los que se puede pasar ahora (mismas reglas que el service; los
+    comprobantes de RN-03 ya los garantizó la aprobación de la legalización, RN-06)."""
+    if viatico.estado != EstadoOperativo.APROBADO:
+        return []
+    orden: list[EstadoFinanciero] = list(EstadoFinanciero)
+    actual = orden.index(EstadoFinanciero(viatico.estado_financiero))
+    destinos: list[EstadoFinanciero] = []
+    for destino in orden[actual + 1 :]:
+        if destino == EstadoFinanciero.TRANSFERIDO:
+            if not viatico.recursos_propios and (viatico.valor_asignado or 0) > 0:
+                destinos.append(destino)
+        elif viatico.etapa == Etapa.LEGALIZACION:
+            destinos.append(destino)
+    return destinos
 
 
 def calcular(viatico: Viatico, actor: Usuario) -> list[str]:
@@ -65,5 +91,24 @@ def calcular(viatico: Viatico, actor: Usuario) -> list[str]:
         and viatico.estado == EstadoOperativo.PENDIENTE
     ):
         acciones.append("gestionar_gastos")
+
+    if (
+        _puede_operar(viatico, actor)
+        and viatico.modalidad == Modalidad.CON_SOLICITUD
+        and viatico.requiere_tiquete
+        and viatico.etapa == Etapa.SOLICITUD
+        and viatico.estado == EstadoOperativo.APROBADO
+    ):
+        acciones.append("gestionar_tiquetes")
+
+    if _puede_tesoreria(viatico, actor):
+        if (
+            viatico.estado == EstadoOperativo.APROBADO
+            and not viatico.recursos_propios
+            and viatico.estado_financiero not in _LIQUIDADO
+        ):
+            acciones.append("registrar_valor_asignado")
+        if destinos_financieros(viatico):
+            acciones.append("cambiar_estado_financiero")
 
     return acciones

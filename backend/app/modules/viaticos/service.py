@@ -84,7 +84,7 @@ def validar_proyecto_exclusivo(proyecto_id: uuid.UUID | None, proyecto_otro: str
         raise ProyectoAmbiguo()
 
 
-def _obtener_proyecto_activo(session: Session, proyecto_id: uuid.UUID) -> Proyecto:
+def obtener_proyecto_activo(session: Session, proyecto_id: uuid.UUID) -> Proyecto:
     proyecto = session.scalar(select(Proyecto).where(Proyecto.id == proyecto_id, Proyecto.activo))
     if proyecto is None:
         raise ValorNoPermitido(
@@ -97,7 +97,7 @@ def _exige_formato_prestador(session: Session, proyecto_id: uuid.UUID | None) ->
     # "Otro" (proyecto_otro) nunca exige formato: no es una fila del catálogo (RN-33).
     if proyecto_id is None:
         return False
-    return _obtener_proyecto_activo(session, proyecto_id).exige_formato_prestador
+    return obtener_proyecto_activo(session, proyecto_id).exige_formato_prestador
 
 
 # --- tarifas activas por ciudad de destino (RN-29) ----------------------------------------------
@@ -237,7 +237,7 @@ def _crear_con_solicitud(
 ) -> ViaticoModelo:
     validar_proyecto_exclusivo(datos.proyecto_id, datos.proyecto_otro)
     if datos.proyecto_id is not None:
-        _obtener_proyecto_activo(session, datos.proyecto_id)
+        obtener_proyecto_activo(session, datos.proyecto_id)
     if datos.requiere_tiquete and actor.fecha_nacimiento is None:
         raise FechaNacimientoRequerida()
 
@@ -550,7 +550,7 @@ def listar(
 # =================================================================================================
 
 
-def _exigir_dueno_o_superadmin(viatico: ViaticoModelo, actor: Usuario) -> None:
+def exigir_dueno_o_superadmin(viatico: ViaticoModelo, actor: Usuario) -> None:
     if viatico.usuario_id != actor.id and actor.rol != Rol.SUPERADMIN:
         raise SinPermiso()
 
@@ -625,7 +625,7 @@ def _editar_solicitud(
     # si los dos no son nulos, requerido si los dos lo son).
     validar_proyecto_exclusivo(nuevo_proyecto_id, nuevo_proyecto_otro)
     if nuevo_proyecto_id is not None:
-        _obtener_proyecto_activo(session, nuevo_proyecto_id)
+        obtener_proyecto_activo(session, nuevo_proyecto_id)
 
     nuevo_requiere_tiquete = cambios.get("requiere_tiquete", viatico.requiere_tiquete)
     if nuevo_requiere_tiquete and actor.fecha_nacimiento is None:
@@ -740,7 +740,7 @@ def editar(
     session: Session, viatico_id: uuid.UUID, datos: ViaticoEditar, actor: Usuario
 ) -> ViaticoModelo:
     viatico = obtener(session, viatico_id, bloquear=True)
-    _exigir_dueno_o_superadmin(viatico, actor)
+    exigir_dueno_o_superadmin(viatico, actor)
     _exigir_editable(viatico)
     cambios = datos.model_dump(exclude_unset=True)
     if not cambios:
@@ -762,7 +762,7 @@ def editar(
                 etapa=viatico.etapa,
                 accion=accion_evento,
                 usuario_id=actor.id,
-                datos=_serializable(datos_evento),
+                datos=serializable(datos_evento),
             )
         )
     session.commit()
@@ -772,7 +772,7 @@ def editar(
 
 def eliminar(session: Session, viatico_id: uuid.UUID, actor: Usuario, ctx: Contexto) -> None:
     viatico = obtener(session, viatico_id, bloquear=True)
-    _exigir_dueno_o_superadmin(viatico, actor)
+    exigir_dueno_o_superadmin(viatico, actor)
     _exigir_editable(viatico)
 
     ahora = datetime.now(UTC)
@@ -804,13 +804,16 @@ def eliminar(session: Session, viatico_id: uuid.UUID, actor: Usuario, ctx: Conte
     session.commit()
 
 
-def _serializable(datos: dict[str, object]) -> dict[str, object]:
+def serializable(datos: dict[str, object]) -> dict[str, object]:
     """`JSONB` no admite `Decimal`/`UUID`/fechas: los vuelve texto antes de guardarlos."""
 
     def _valor(v: object) -> object:
         if isinstance(v, dict):
             return {k: _valor(x) for k, x in v.items()}
-        if isinstance(v, uuid.UUID | Decimal | datetime):
+        if isinstance(v, Decimal):
+            # Todo el dinero es NUMERIC(14,2): siempre con 2 decimales, venga de la BD o no.
+            return format(v.quantize(Decimal("0.01")), "f")
+        if isinstance(v, uuid.UUID | date):
             return str(v)
         return v
 
@@ -824,20 +827,30 @@ def _serializable(datos: dict[str, object]) -> dict[str, object]:
 
 
 def _exigir_no_autoaprobacion(
-    session: Session, viatico: ViaticoModelo, actor: Usuario, ctx: Contexto
+    session: Session,
+    viatico: ViaticoModelo,
+    actor: Usuario,
+    ctx: Contexto,
+    *,
+    accion: AccionViatico | None = None,
+    detalle: str | None = None,
 ) -> None:
-    """RN-27: nadie aprueba, rechaza ni devuelve su propio viático, salvo SUPERADMIN (auditado)."""
+    """RN-27: nadie aprueba, rechaza, devuelve, gestiona tiquetes, valida financieramente ni
+    liquida su propio viático, salvo SUPERADMIN (auditado)."""
     if viatico.usuario_id != actor.id:
         return
     if actor.rol != Rol.SUPERADMIN:
-        raise AutoaprobacionNoPermitida()
+        raise AutoaprobacionNoPermitida(detail=detalle)
+    datos: dict[str, object] = {"folio": viatico.folio}
+    if accion is not None:
+        datos["accion"] = accion.value
     registrar(
         session,
         AccionAuditoria.AUTOAPROBACION_SUPERADMIN,
         ENTIDAD,
         viatico.id,
         usuario_id=actor.id,
-        datos={"folio": viatico.folio},
+        datos=datos,
         ip=ctx.ip,
         user_agent=ctx.user_agent,
     )
@@ -870,6 +883,13 @@ def _exigir_gastos_con_comprobante(session: Session, viatico: ViaticoModelo) -> 
         )
 
 
+_CAMPO_ESTADO = {
+    DimensionEvento.OPERATIVO: "estado",
+    DimensionEvento.ETAPA: "estado",
+    DimensionEvento.FINANCIERO: "estado_financiero",
+}
+
+
 def transicionar(
     session: Session,
     viatico_id: uuid.UUID,
@@ -879,11 +899,19 @@ def transicionar(
     dimension: DimensionEvento | None,
     comentario: str | None,
     mutar: Callable[[ViaticoModelo], dict[str, object] | None],
+    registrar_estados: bool = True,
+    eventos_adicionales: Callable[[ViaticoModelo], list[ViaticoEvento]] | None = None,
 ) -> ViaticoModelo:
     """Núcleo común de toda transición: bloquea la fila (`FOR UPDATE`), aplica `mutar` (que valida
-    y cambia el estado) y registra el evento, todo en la misma transacción."""
+    y cambia el estado) y registra el evento, todo en la misma transacción.
+
+    El estado anterior/nuevo del evento es el de la dimensión (`estado_financiero` para
+    `FINANCIERO`, `estado` para las demás); `registrar_estados=False` los omite (acciones que no
+    cambian ningún estado: tiquetes, valor asignado). `eventos_adicionales` agrega otros eventos
+    en la misma transacción (p. ej. `LIQUIDAR` junto con el cambio de estado financiero)."""
     viatico = obtener(session, viatico_id, bloquear=True)
-    estado_anterior = viatico.estado
+    campo = _CAMPO_ESTADO[dimension] if registrar_estados and dimension is not None else None
+    estado_anterior = getattr(viatico, campo) if campo else None
     datos = mutar(viatico)
     viatico.updated_by = actor.id
     evento = ViaticoEvento(
@@ -892,7 +920,7 @@ def transicionar(
         accion=accion,
         dimension=dimension,
         estado_anterior=estado_anterior,
-        estado_nuevo=viatico.estado,
+        estado_nuevo=getattr(viatico, campo) if campo else None,
         comentario=comentario,
         usuario_id=actor.id,
     )
@@ -900,8 +928,10 @@ def transicionar(
     # SQL `NULL`) y violaría `ck_viatico_eventos__datos_objeto`. Se omite el atributo si no hay
     # nada que guardar, igual que hace `_crear_evento_inicial`.
     if datos:
-        evento.datos = _serializable(datos)
+        evento.datos = serializable(datos)
     session.add(evento)
+    if eventos_adicionales is not None:
+        session.add_all(eventos_adicionales(viatico))
     session.commit()
     session.refresh(viatico)
     return viatico
@@ -991,7 +1021,7 @@ def habilitar_legalizacion(
     session: Session, viatico_id: uuid.UUID, actor: Usuario
 ) -> ViaticoModelo:
     def mutar(viatico: ViaticoModelo) -> None:
-        _exigir_dueno_o_superadmin(viatico, actor)
+        exigir_dueno_o_superadmin(viatico, actor)
         if viatico.modalidad != Modalidad.CON_SOLICITUD or viatico.etapa != Etapa.SOLICITUD:
             raise LegalizacionNoHabilitable(detail="Solo aplica a una solicitud sin habilitar")
         if viatico.estado != EstadoOperativo.APROBADO:
@@ -1016,4 +1046,191 @@ def habilitar_legalizacion(
         dimension=DimensionEvento.ETAPA,
         comentario=None,
         mutar=mutar,
+    )
+
+
+# =================================================================================================
+# Tiquetes y dinero (S2-07): gestionar-tiquetes (ADMIN), valor-asignado y estado-financiero
+# (FINANCIERO). RN-03, RN-14, RN-19, RN-22, RN-27, S-03, S-10.
+# =================================================================================================
+
+_ORDEN_FINANCIERO = {
+    EstadoFinanciero.PENDIENTE: 0,
+    EstadoFinanciero.TRANSFERIDO: 1,
+    EstadoFinanciero.PAGADO: 2,
+    EstadoFinanciero.PROCESADO: 3,
+}
+_LIQUIDADO = frozenset({EstadoFinanciero.PAGADO, EstadoFinanciero.PROCESADO})
+
+
+def gestionar_tiquetes(
+    session: Session,
+    viatico_id: uuid.UUID,
+    actor: Usuario,
+    comentario: str | None,
+    referencia: str | None,
+    ctx: Contexto,
+) -> ViaticoModelo:
+    """S-10: ADMIN registra la emisión de los tiquetes como evento, sin estado propio. Se puede
+    repetir (reexpedición, cambios de vuelo): cada registro queda en el historial."""
+
+    def mutar(viatico: ViaticoModelo) -> dict[str, object] | None:
+        _exigir_no_autoaprobacion(
+            session,
+            viatico,
+            actor,
+            ctx,
+            accion=AccionViatico.GESTIONAR_TIQUETES,
+            detalle="No puede gestionar los tiquetes de su propio viático",
+        )
+        if viatico.modalidad != Modalidad.CON_SOLICITUD or not viatico.requiere_tiquete:
+            raise TransicionInvalida(detail="La solicitud no requiere tiquete")
+        if viatico.etapa != Etapa.SOLICITUD or viatico.estado != EstadoOperativo.APROBADO:
+            raise TransicionInvalida(detail="Los tiquetes se gestionan con la solicitud aprobada")
+        return {"referencia": referencia} if referencia else None
+
+    return transicionar(
+        session,
+        viatico_id,
+        actor,
+        accion=AccionViatico.GESTIONAR_TIQUETES,
+        dimension=DimensionEvento.OPERATIVO,
+        comentario=comentario or None,
+        mutar=mutar,
+        registrar_estados=False,
+    )
+
+
+def registrar_valor_asignado(
+    session: Session,
+    viatico_id: uuid.UUID,
+    actor: Usuario,
+    valor: Decimal,
+    comentario: str | None,
+    ctx: Contexto,
+) -> ViaticoModelo:
+    """RN-19: solo FINANCIERO/SUPERADMIN, con el viático `APROBADO`, sin recursos propios (RN-14:
+    el transferido sería 0) y sin liquidar. `valor_transferido` lo recalcula la BD."""
+
+    def mutar(viatico: ViaticoModelo) -> dict[str, object]:
+        _exigir_no_autoaprobacion(
+            session,
+            viatico,
+            actor,
+            ctx,
+            accion=AccionViatico.EDITAR_VALOR_ASIGNADO,
+            detalle="No puede registrar el valor asignado de su propio viático",
+        )
+        if viatico.recursos_propios:
+            raise TransicionInvalida(
+                detail="Con recursos propios no hay valor asignado: el transferido es 0 (RN-14)"
+            )
+        if viatico.estado != EstadoOperativo.APROBADO:
+            raise TransicionInvalida(detail="El viático debe estar APROBADO")
+        if viatico.estado_financiero in _LIQUIDADO:
+            raise TransicionInvalida(detail="El viático ya está liquidado")
+        anterior = viatico.valor_asignado
+        viatico.valor_asignado = valor
+        return {
+            "antes": {"valor_asignado": anterior},
+            "despues": {"valor_asignado": valor},
+            "presupuesto_solicitado": viatico.presupuesto_solicitado,
+        }
+
+    return transicionar(
+        session,
+        viatico_id,
+        actor,
+        accion=AccionViatico.EDITAR_VALOR_ASIGNADO,
+        dimension=DimensionEvento.FINANCIERO,
+        comentario=comentario or None,
+        mutar=mutar,
+        registrar_estados=False,
+    )
+
+
+def sentido_liquidacion(saldo: Decimal) -> str:
+    """RN-02: `saldo > 0` el viajero reintegra; `saldo < 0` la empresa reembolsa."""
+    if saldo > 0:
+        return "REINTEGRO"
+    if saldo < 0:
+        return "REEMBOLSO"
+    return "SIN_SALDO"
+
+
+def cambiar_estado_financiero(
+    session: Session,
+    viatico_id: uuid.UUID,
+    actor: Usuario,
+    destino: EstadoFinanciero,
+    comentario: str | None,
+    ctx: Contexto,
+) -> ViaticoModelo:
+    """Solo hacia adelante (`PENDIENTE → TRANSFERIDO → PAGADO → PROCESADO`; S-03 permite saltar
+    pasos, p. ej. recursos propios: `PENDIENTE → PAGADO`). Siempre con el viático `APROBADO`.
+    `TRANSFERIDO` exige un valor asignado > 0 y sin recursos propios; `PAGADO`/`PROCESADO`
+    exigen RN-03 (etapa `LEGALIZACION`, gastos con comprobante). Al liquidar (primera llegada a
+    `PAGADO`/`PROCESADO`) se registra además `LIQUIDAR` con el saldo y su sentido (RN-10)."""
+    anterior: dict[str, EstadoFinanciero] = {}
+
+    def mutar(viatico: ViaticoModelo) -> None:
+        _exigir_no_autoaprobacion(
+            session,
+            viatico,
+            actor,
+            ctx,
+            accion=AccionViatico.CAMBIAR_ESTADO_FINANCIERO,
+            detalle="No puede validar financieramente ni liquidar su propio viático",
+        )
+        actual = EstadoFinanciero(viatico.estado_financiero)
+        if _ORDEN_FINANCIERO[destino] <= _ORDEN_FINANCIERO[actual]:
+            raise TransicionInvalida(detail=f"No se puede pasar de {actual} a {destino}")
+        if viatico.estado != EstadoOperativo.APROBADO:
+            raise TransicionInvalida(detail="El viático debe estar APROBADO")
+        if destino == EstadoFinanciero.TRANSFERIDO:
+            if viatico.recursos_propios:
+                raise TransicionInvalida(detail="Con recursos propios no hay desembolso (RN-14)")
+            if viatico.valor_asignado <= 0:
+                raise TransicionInvalida(detail="Registre primero el valor asignado")
+        else:
+            if viatico.etapa != Etapa.LEGALIZACION:
+                raise TransicionInvalida(detail="Solo se liquida en la etapa LEGALIZACION (RN-03)")
+            _exigir_gastos_con_comprobante(session, viatico)
+        anterior["estado"] = actual
+        viatico.estado_financiero = destino
+        viatico.estado_financiero_at = datetime.now(UTC)
+        return None
+
+    def liquidacion(viatico: ViaticoModelo) -> list[ViaticoEvento]:
+        if destino not in _LIQUIDADO or anterior["estado"] in _LIQUIDADO:
+            return []
+        total_gastos, saldo = _saldo(session, viatico.id)
+        return [
+            ViaticoEvento(
+                viatico_id=viatico.id,
+                etapa=viatico.etapa,
+                accion=AccionViatico.LIQUIDAR,
+                dimension=DimensionEvento.FINANCIERO,
+                comentario=comentario or None,
+                usuario_id=actor.id,
+                datos=serializable(
+                    {
+                        "valor_transferido": viatico.valor_transferido,
+                        "total_gastos": total_gastos,
+                        "saldo": saldo,
+                        "sentido": sentido_liquidacion(saldo),
+                    }
+                ),
+            )
+        ]
+
+    return transicionar(
+        session,
+        viatico_id,
+        actor,
+        accion=AccionViatico.CAMBIAR_ESTADO_FINANCIERO,
+        dimension=DimensionEvento.FINANCIERO,
+        comentario=comentario or None,
+        mutar=mutar,
+        eventos_adicionales=liquidacion,
     )

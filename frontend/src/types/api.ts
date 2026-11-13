@@ -559,6 +559,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/viaticos/{viatico_id}/gestionar-tiquetes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registrar la gestión de tiquetes de una solicitud aprobada (ADMIN, SUPERADMIN; S-10) */
+        post: operations["gestionar_tiquetes_api_v1_viaticos__viatico_id__gestionar_tiquetes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/valor-asignado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Registrar el valor asignado (FINANCIERO, SUPERADMIN; RN-14, RN-19, RN-27) */
+        patch: operations["valor_asignado_api_v1_viaticos__viatico_id__valor_asignado_patch"];
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/estado-financiero": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cambiar el estado financiero y liquidar (FINANCIERO, SUPERADMIN; RN-03, RN-27) */
+        post: operations["estado_financiero_api_v1_viaticos__viatico_id__estado_financiero_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/gastos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gastos activos de un viático (dueño, FINANCIERO, ADMIN, SUPERADMIN) */
+        get: operations["listar_api_v1_viaticos__viatico_id__gastos_get"];
+        put?: never;
+        /** Registrar un gasto (dueño o SUPERADMIN; legalización PENDIENTE) */
+        post: operations["crear_api_v1_viaticos__viatico_id__gastos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/gastos/{gasto_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un gasto */
+        get: operations["detalle_api_v1_viaticos__viatico_id__gastos__gasto_id__get"];
+        put?: never;
+        post?: never;
+        /** Eliminar un gasto (lógico; dueño o SUPERADMIN) */
+        delete: operations["eliminar_api_v1_viaticos__viatico_id__gastos__gasto_id__delete"];
+        options?: never;
+        head?: never;
+        /** Editar un gasto o reemplazar/quitar sus adjuntos (dueño o SUPERADMIN) */
+        patch: operations["editar_api_v1_viaticos__viatico_id__gastos__gasto_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/archivos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Subir un archivo (tipo validado por contenido; RN-13) */
+        post: operations["subir_api_v1_archivos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/archivos/contenido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contenido de un archivo con un token temporal (solo STORAGE_BACKEND=local) */
+        get: operations["contenido_api_v1_archivos_contenido_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/archivos/{archivo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Metadatos de un archivo (quien lo subió, F A S) */
+        get: operations["detalle_api_v1_archivos__archivo_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/archivos/{archivo_id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL temporal de lectura de un archivo (5 min; quien lo subió, F A S) */
+        get: operations["url_api_v1_archivos__archivo_id__url_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/firma": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Firma del perfil (URL temporal); 404 si no tiene */
+        get: operations["obtener_firma_api_v1_me_firma_get"];
+        /** Guardar la firma del perfil (archivo subido con propósito FIRMA) */
+        put: operations["asignar_firma_api_v1_me_firma_put"];
+        post?: never;
+        /** Quitar la firma del perfil */
+        delete: operations["quitar_firma_api_v1_me_firma_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auditoria": {
         parameters: {
             query?: never;
@@ -605,6 +780,70 @@ export interface components {
         AccionEntrada: {
             /** Comentario */
             comentario?: string | null;
+        };
+        /** AdjuntoRef */
+        AdjuntoRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nombre */
+            nombre: string | null;
+            /** Mime Type */
+            mime_type: string | null;
+        };
+        /**
+         * ArchivoSalida
+         * @description Metadatos de un archivo subido. Nunca incluye la clave de almacenamiento.
+         */
+        ArchivoSalida: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Nombre Original */
+            nombre_original: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Tamano Bytes */
+            tamano_bytes: number;
+            /** Sha256 */
+            sha256: string;
+            proposito: components["schemas"]["PropositoArchivo"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ArchivoUrl
+         * @description URL temporal de lectura: prefirmada de S3 (o firmada en local), vigente 5 minutos.
+         */
+        ArchivoUrl: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Nombre */
+            nombre: string;
+        };
+        /** Body_subir_api_v1_archivos_post */
+        Body_subir_api_v1_archivos_post: {
+            /**
+             * Archivo
+             * Format: binary
+             * @description Contenido del archivo (máx. 10 MB)
+             */
+            archivo: string;
+            proposito: components["schemas"]["PropositoArchivo"];
         };
         /** CalcularPresupuestoEntrada */
         CalcularPresupuestoEntrada: {
@@ -781,6 +1020,15 @@ export interface components {
          */
         EstadoFinanciero: "PENDIENTE" | "TRANSFERIDO" | "PAGADO" | "PROCESADO";
         /**
+         * EstadoFinancieroEntrada
+         * @description S-03: se envía el estado destino; las transiciones válidas las decide el service.
+         */
+        EstadoFinancieroEntrada: {
+            estado_financiero: components["schemas"]["EstadoFinanciero"];
+            /** Comentario */
+            comentario?: string | null;
+        };
+        /**
          * EstadoOperativo
          * @description `viaticos.estado` (AppSheet `Estado`): lo cambian ADMIN/SUPERADMIN (DP-13).
          * @enum {string}
@@ -841,6 +1089,147 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** FirmaAsignar */
+        FirmaAsignar: {
+            /**
+             * Archivo Id
+             * Format: uuid
+             */
+            archivo_id: string;
+        };
+        /** FirmaSalida */
+        FirmaSalida: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Mime Type */
+            mime_type: string;
+            /** Nombre */
+            nombre: string;
+            /**
+             * Archivo Id
+             * Format: uuid
+             */
+            archivo_id: string;
+        };
+        /** GastoCrear */
+        GastoCrear: {
+            /**
+             * Fecha Factura
+             * Format: date
+             */
+            fecha_factura: string;
+            /**
+             * Rubro Id
+             * Format: uuid
+             */
+            rubro_id: string;
+            /** Proyecto Id */
+            proyecto_id?: string | null;
+            /** Proyecto Otro */
+            proyecto_otro?: string | null;
+            /** Concepto */
+            concepto: string;
+            /** Cc Nit */
+            cc_nit?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Valor */
+            valor: number | string;
+            /** Observaciones */
+            observaciones?: string | null;
+            /** Soporte Id */
+            soporte_id?: string | null;
+            /** Archivo Id */
+            archivo_id?: string | null;
+        };
+        /**
+         * GastoEditar
+         * @description Solo lo que se envía cambia. `soporte_id`/`archivo_id` en `null` quitan el adjunto (el
+         *     gasto puede quedar sin comprobante, RN-21); un id nuevo lo reemplaza.
+         */
+        GastoEditar: {
+            /** Fecha Factura */
+            fecha_factura?: string | null;
+            /** Rubro Id */
+            rubro_id?: string | null;
+            /** Proyecto Id */
+            proyecto_id?: string | null;
+            /** Proyecto Otro */
+            proyecto_otro?: string | null;
+            /** Concepto */
+            concepto?: string | null;
+            /** Cc Nit */
+            cc_nit?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Valor */
+            valor?: number | string | null;
+            /** Observaciones */
+            observaciones?: string | null;
+            /** Soporte Id */
+            soporte_id?: string | null;
+            /** Archivo Id */
+            archivo_id?: string | null;
+        };
+        /** GastoSalida */
+        GastoSalida: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Viatico Id
+             * Format: uuid
+             */
+            viatico_id: string;
+            /**
+             * Fecha Factura
+             * Format: date
+             */
+            fecha_factura: string;
+            rubro: components["schemas"]["Referencia"];
+            proyecto: components["schemas"]["ProyectoRefSalida"];
+            /** Concepto */
+            concepto: string;
+            /** Cc Nit */
+            cc_nit: string | null;
+            /** Empresa */
+            empresa: string | null;
+            /** Valor */
+            valor: string;
+            /** Observaciones */
+            observaciones: string | null;
+            soporte: components["schemas"]["AdjuntoRef"] | null;
+            archivo: components["schemas"]["AdjuntoRef"] | null;
+            /** Tiene Comprobante */
+            tiene_comprobante: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * GestionarTiquetesEntrada
+         * @description S-10: registro de la emisión de tiquetes; comentario y referencia opcionales.
+         */
+        GestionarTiquetesEntrada: {
+            /** Comentario */
+            comentario?: string | null;
+            /** Referencia */
+            referencia?: string | null;
         };
         /** GoogleEntrada */
         GoogleEntrada: {
@@ -936,6 +1325,12 @@ export interface components {
          * @enum {string}
          */
         Permiso: "viaticos:leer_propios" | "viaticos:crear" | "viaticos:calcular_presupuesto" | "viaticos:habilitar_legalizacion" | "gastos:gestionar_propios" | "catalogos:leer" | "viaticos:leer_todos" | "comprobantes:leer_todos" | "pagos:leer" | "cargos:leer" | "tarifas:leer" | "indicadores:leer" | "viaticos:aprobar" | "viaticos:rechazar" | "viaticos:devolver" | "viaticos:gestionar_tiquetes" | "viaticos:registrar_valor_asignado" | "viaticos:cambiar_estado_financiero" | "cargos:gestionar" | "usuarios:gestionar_operativos" | "usuarios:gestionar_superadmin" | "catalogos:gestionar" | "tarifas:gestionar" | "auditoria:leer";
+        /**
+         * PropositoArchivo
+         * @description Para qué se subió un archivo; el service valida el tipo MIME según el propósito (RN-13).
+         * @enum {string}
+         */
+        PropositoArchivo: "SOPORTE" | "ARCHIVO" | "FIRMA" | "FORMATO_PRESTADOR";
         /** ProyectoRefSalida */
         ProyectoRefSalida: {
             /** Id */
@@ -1309,6 +1704,17 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * ValorAsignadoEntrada
+         * @description RN-19: lo registra FINANCIERO/SUPERADMIN; `>= 0` (RN-08). `valor_transferido` no se
+         *     acepta nunca: lo calcula la BD (RN-14).
+         */
+        ValorAsignadoEntrada: {
+            /** Valor Asignado */
+            valor_asignado: number | string;
+            /** Comentario */
+            comentario?: string | null;
         };
         /** ViaticoCrearConSolicitud */
         ViaticoCrearConSolicitud: {
@@ -2858,6 +3264,472 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    gestionar_tiquetes_api_v1_viaticos__viatico_id__gestionar_tiquetes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GestionarTiquetesEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    valor_asignado_api_v1_viaticos__viatico_id__valor_asignado_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValorAsignadoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_financiero_api_v1_viaticos__viatico_id__estado_financiero_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EstadoFinancieroEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_api_v1_viaticos__viatico_id__gastos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GastoSalida"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_api_v1_viaticos__viatico_id__gastos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GastoCrear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GastoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_api_v1_viaticos__viatico_id__gastos__gasto_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+                gasto_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GastoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    eliminar_api_v1_viaticos__viatico_id__gastos__gasto_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+                gasto_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_api_v1_viaticos__viatico_id__gastos__gasto_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+                gasto_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GastoEditar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GastoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subir_api_v1_archivos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_subir_api_v1_archivos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    contenido_api_v1_archivos_contenido_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_api_v1_archivos__archivo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archivo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    url_api_v1_archivos__archivo_id__url_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                archivo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivoUrl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_firma_api_v1_me_firma_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirmaSalida"];
+                };
+            };
+        };
+    };
+    asignar_firma_api_v1_me_firma_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirmaAsignar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirmaSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quitar_firma_api_v1_me_firma_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

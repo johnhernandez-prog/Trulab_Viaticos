@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Iterator
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi import FastAPI
@@ -14,6 +15,9 @@ from app.core.mail import Correo, get_mailer
 from app.main import create_app
 from app.modules.auth.errores import NoAutenticado
 from app.modules.auth.google import get_verificador_google
+
+if TYPE_CHECKING:
+    from app.modules.archivos.storage import AlmacenamientoLocal
 
 # Contexto de RLS por defecto de `sesion` (S2-03): privilegiado (SUPERADMIN), para que las
 # fábricas de `tests/fabricas.py` puedan insertar sin pasar antes por una petición autenticada.
@@ -92,3 +96,14 @@ def api(
     with TestClient(app, raise_server_exceptions=False) as cliente:
         yield cliente
     rate_limit.contador.reiniciar()
+
+
+@pytest.fixture
+def almacen(app: FastAPI, tmp_path: Path) -> "AlmacenamientoLocal":
+    """Almacenamiento local en una carpeta temporal para las pruebas HTTP de archivos (S2-06)."""
+    from app.core.config import get_settings
+    from app.modules.archivos.storage import AlmacenamientoLocal, get_almacenamiento
+
+    almacenamiento = AlmacenamientoLocal(tmp_path / "almacen", get_settings().jwt_secret)
+    app.dependency_overrides[get_almacenamiento] = lambda: almacenamiento
+    return almacenamiento
