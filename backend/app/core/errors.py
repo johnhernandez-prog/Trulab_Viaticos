@@ -45,6 +45,39 @@ class ErrorDominio(Exception):
         self.errors = errors
 
 
+# --- Errores de dominio comunes a todos los módulos (docs/api-design.md §7) ---------------------
+
+
+class NoEncontrado(ErrorDominio):
+    # También para un recurso ajeno: no se revela que existe (ADR-012).
+    status = 404
+    code = "NO_ENCONTRADO"
+    title = "El recurso no existe"
+
+
+class Duplicado(ErrorDominio):
+    status = 409
+    code = "DUPLICADO"
+    title = "Ya existe un registro con ese valor"
+
+
+class EnUso(ErrorDominio):
+    status = 409
+    code = "EN_USO"
+    title = "El registro está en uso y no se puede eliminar"
+
+
+class ValorNoPermitido(ErrorDominio):
+    status = 422
+    code = "VALOR_NO_PERMITIDO"
+    title = "Un valor no está permitido"
+
+
+def error_de_campo(campo: str, mensaje: str, code: str | None = None) -> list[dict[str, str]]:
+    """`errors[]` de un solo campo, con el mismo formato que los errores de validación."""
+    return [{"field": campo, "code": code or "VALOR_NO_PERMITIDO", "message": mensaje}]
+
+
 def problema(
     request: Request,
     status: int,

@@ -84,11 +84,19 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | POST | `/usuarios` | A S | Operativos: `{nombre_completo, correo, username, rol, cargo_id?, celula_id?, cedula?, es_prestador_servicios, fecha_nacimiento?}`. El servidor genera una **contraseña temporal** (`debe_cambiar_password = true`) y la envía **por correo**; ADMIN no la ve (S-13). **`rol = SUPERADMIN`** solo por S: exige correo del dominio `@trulab.co`, no lleva username ni contraseña, audita `SUPERADMIN_ASIGNADO`. ADMIN que intenta `SUPERADMIN` → `403 SIN_PERMISO` |
 | GET | `/usuarios/{id}` | A S | |
 | PATCH | `/usuarios/{id}` | A S | Cambiar el rol revoca sesiones y se audita. **Promover a `SUPERADMIN`** (solo S): valida correo `@trulab.co`, borra username/contraseña, audita `SUPERADMIN_ASIGNADO`. **Degradar un SUPERADMIN** (solo S): exige `username` y genera contraseña temporal; `409 ULTIMO_SUPERADMIN` si es el último activo. ADMIN no puede modificar a un SUPERADMIN (`403`) |
-| POST | `/usuarios/{id}/desactivar` | A S | No a uno mismo; `409 ULTIMO_SUPERADMIN` si es el último SUPERADMIN activo; desactivar un SUPERADMIN solo S. Revoca sesiones |
+| POST | `/usuarios/{id}/desactivar` | A S | No a uno mismo (`409 ACCION_SOBRE_SI_MISMO`); idempotente; `409 ULTIMO_SUPERADMIN` si es el último SUPERADMIN activo; desactivar un SUPERADMIN solo S. Revoca sesiones |
 | POST | `/usuarios/{id}/activar` | A S | |
 | POST | `/usuarios/{id}/restablecer-password` | A S | Solo operativos: genera una contraseña temporal nueva, la envía por correo, `debe_cambiar_password = true`, revoca sesiones, audita `PASSWORD_CAMBIADA`. Sobre un SUPERADMIN → `409 SUPERADMIN_SIN_PASSWORD` |
 | GET/PUT/DELETE | `/me/firma` | V F A S | Sube (multipart, imagen), consulta (URL firmada) o quita la firma del perfil (RN-32) |
 | PATCH | `/me` | V F A S | Solo `fecha_nacimiento` (RN-31) |
+
+**Implementado en S1-10.** Detalles del contrato:
+
+- Listado paginado (`page`, `size`, `sort` ∈ `nombre_completo`, `-nombre_completo`, `created_at`, `-created_at`); `q` busca en nombre, correo y usuario. Cada fila trae `cargo`/`celula` como `{id, nombre}`, `activo`, `bloqueado` y `debe_cambiar_password`; nunca `password_hash` ni `google_sub`. El detalle agrega `cedula`, `fecha_nacimiento` y `updated_at`.
+- `correo` y `username` se normalizan a minúsculas; únicos sin distinguir mayúsculas, igual que `cedula` → `409 DUPLICADO` con `errors[].field`. `cargo_id` eliminado o `celula_id` inactiva → `422 VALOR_NO_PERMITIDO`. Enviar `password`, `debe_cambiar_password`, `google_sub` o `activo` → `422 VALIDACION`.
+- SUPERADMIN con correo de otro dominio o con `username` → `422 VALOR_NO_PERMITIDO` (`field`: `correo` / `username`). Cambiar el correo de un SUPERADMIN borra `google_sub` (se vuelve a fijar en su siguiente login con Google).
+- La contraseña temporal solo viaja en el correo (en segundo plano, después del commit); la respuesta nunca la incluye. `restablecer-password` responde `{detail}`.
+- Auditoría: `USUARIO_CREAR`, `USUARIO_EDITAR` (antes/después solo de lo que cambió; cédula enmascarada, fecha de nacimiento solo como "[dato personal]"), `ROL_CAMBIAR`, `SUPERADMIN_ASIGNADO` (`via`: `alta`/`promocion`), `USUARIO_ACTIVAR`/`USUARIO_DESACTIVAR` y `PASSWORD_CAMBIADA` (`motivo: RESTABLECIDA_POR_ADMIN`), siempre con el actor, la IP y el user agent.
 
 ### 5.2 Cargos
 
@@ -98,7 +106,9 @@ Leyenda: V=VIAJERO, F=FINANCIERO, A=ADMIN, S=SUPERADMIN.
 | POST | `/cargos` | A S | Folio `CA-` generado |
 | GET | `/cargos/{id}` | F A S | |
 | PATCH | `/cargos/{id}` | A S | |
-| DELETE | `/cargos/{id}` | A S | Lógico; `409` si está en uso |
+| DELETE | `/cargos/{id}` | A S | Lógico (`204`); `409 EN_USO` si algún usuario, activo o no, lo tiene |
+
+**Implementado en S1-10:** listado paginado con `q` (nombre o folio) y `sort` ∈ `nombre`, `folio`, `created_at` (con `-` para descendente); nombre único sin distinguir mayúsculas entre los no eliminados (`409 DUPLICADO`), y se puede reutilizar tras eliminar. Auditoría `CARGO_CREAR`, `CARGO_EDITAR` (antes/después) y `CARGO_ELIMINAR`.
 
 ### 5.3 Catálogos (DP-14 ✅, ADR-022) y tarifas (DP-20 ✅, ADR-030)
 
@@ -181,7 +191,7 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 
 ### 5.8 Auditoría (SUPERADMIN, post-MVP en la UI)
 
-`GET /auditoria?entidad&entidad_id&usuario_id&accion&desde&hasta`.
+`GET /auditoria?entidad&entidad_id&usuario_id&accion&desde&hasta` (**implementado en S1-10**, permiso `auditoria:leer`): paginado, más reciente primero; `desde`/`hasta` son fechas UTC inclusivas.
 
 ## 6. Convenciones de respuesta
 
@@ -255,7 +265,7 @@ El cambio de estado financiero es `POST /viaticos/{id}/estado-financiero`.
 | 401 | `NO_AUTENTICADO`, `TOKEN_EXPIRADO`, `CREDENCIALES_INVALIDAS` | Sin token, token inválido, o credenciales incorrectas (mensaje genérico) |
 | 403 | `SIN_PERMISO`, `USUARIO_INACTIVO`, `USUARIO_NO_REGISTRADO`, `DOMINIO_NO_PERMITIDO`, `METODO_ACCESO_NO_PERMITIDO`, `CAMBIO_PASSWORD_REQUERIDO` | Incluye la autoaprobación (RN-27) y la falta de `X-Requested-With` en `refresh`/`logout` |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente **o ajeno** |
-| 409 | `TRANSICION_INVALIDA`, `SOLICITUD_INCOMPLETA`, `LEGALIZACION_INCOMPLETA`, `LEGALIZACION_NO_HABILITABLE`, `ETAPA_INVALIDA`, `REQUIERE_APROBACION`, `EN_USO`, `DUPLICADO`, `NO_EDITABLE`, `ULTIMO_SUPERADMIN`, `SUPERADMIN_SIN_PASSWORD` | Reglas de negocio o de estado |
+| 409 | `TRANSICION_INVALIDA`, `SOLICITUD_INCOMPLETA`, `LEGALIZACION_INCOMPLETA`, `LEGALIZACION_NO_HABILITABLE`, `ETAPA_INVALIDA`, `REQUIERE_APROBACION`, `EN_USO`, `DUPLICADO`, `NO_EDITABLE`, `ULTIMO_SUPERADMIN`, `SUPERADMIN_SIN_PASSWORD`, `ACCION_SOBRE_SI_MISMO` | Reglas de negocio o de estado |
 | 413 | `ARCHIVO_MUY_GRANDE` | Más de 10 MB |
 | 415 | `TIPO_ARCHIVO_NO_PERMITIDO` | Tipo no admitido o en el campo equivocado |
 | 422 | `VALIDACION`, `VALOR_NO_PERMITIDO`, `PROYECTO_REQUERIDO`, `PROYECTO_AMBIGUO`, `COMENTARIO_REQUERIDO`, `PASSWORD_DEBIL`, `PASSWORD_ACTUAL_INCORRECTA`, `TOKEN_INVALIDO`, `TRAYECTOS_INVALIDOS`, `FECHA_NACIMIENTO_REQUERIDA`, `IMPORTE_NO_PERMITIDO` | Errores de campo; token de recuperación inexistente/usado/vencido (mensaje único); 0 ó más de 5 trayectos, origen = destino (salvo "Otro"), regreso anterior a la ida (RN-30); importes tarifarios enviados por el cliente (RN-29) |

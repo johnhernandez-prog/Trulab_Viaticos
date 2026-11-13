@@ -7,7 +7,6 @@ cambio en `MATRIZ` que no esté en la documentación la rompe.
 
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import pytest
@@ -16,15 +15,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.db import fijar_contexto_rls, get_engine
 from app.core.enums import Rol
 from app.core.permissions import MATRIZ, Permiso, permisos_de, require_permission, tiene_permiso
-from app.core.security import emitir_access_token
 from app.modules.auth.dependencias import Autenticado
-from app.modules.auth.models import Sesion
-from app.modules.usuarios.models import Usuario
-from tests.fabricas import crear_usuario
+from tests.fabricas import bearer, crear_usuario
 
 V, F, A, S = Rol.VIAJERO, Rol.FINANCIERO, Rol.ADMIN, Rol.SUPERADMIN
 TODOS = frozenset({V, F, A, S})
@@ -150,33 +145,13 @@ def api_permisos(app: FastAPI, api: TestClient) -> Iterator[TestClient]:
     yield api
 
 
-def _bearer(sesion: Session, usuario: Usuario) -> dict[str, str]:
-    """Access token válido sin pasar por el login (evita el costo de Argon2 en cada caso)."""
-    registro = Sesion(
-        usuario_id=usuario.id,
-        token_hash=uuid.uuid4().hex * 2,  # 64 hex, como un SHA-256
-        expires_at=datetime.now(UTC) + timedelta(days=1),
-    )
-    sesion.add(registro)
-    sesion.flush()
-    token, _ = emitir_access_token(
-        usuario_id=usuario.id,
-        sesion_id=registro.id,
-        rol=usuario.rol,
-        cambio_password=usuario.debe_cambiar_password,
-        secreto=get_settings().jwt_secret,
-        ttl=timedelta(minutes=5),
-    )
-    return {"Authorization": f"Bearer {token}"}
-
-
 @pytest.mark.parametrize(("rol", "permiso"), CASOS, ids=_id)
 def test_require_permission_por_rol(
     api_permisos: TestClient, sesion: Session, rol: Rol, permiso: str
 ) -> None:
     usuario = crear_usuario(sesion, rol=rol)
 
-    respuesta = api_permisos.get(f"/api/v1/_prueba/{permiso}", headers=_bearer(sesion, usuario))
+    respuesta = api_permisos.get(f"/api/v1/_prueba/{permiso}", headers=bearer(sesion, usuario))
 
     if rol in ESPERADO[permiso]:
         assert respuesta.status_code == 200
@@ -200,7 +175,7 @@ def test_require_permission_con_cambio_de_password_pendiente(
 ) -> None:
     usuario = crear_usuario(sesion, rol=Rol.ADMIN, debe_cambiar_password=True)
 
-    respuesta = api_permisos.get("/api/v1/_prueba/cargos:leer", headers=_bearer(sesion, usuario))
+    respuesta = api_permisos.get("/api/v1/_prueba/cargos:leer", headers=bearer(sesion, usuario))
 
     assert respuesta.status_code == 403
     assert respuesta.json()["code"] == "CAMBIO_PASSWORD_REQUERIDO"
@@ -208,7 +183,7 @@ def test_require_permission_con_cambio_de_password_pendiente(
 
 def test_el_rol_se_lee_de_la_bd_y_no_del_token(api_permisos: TestClient, sesion: Session) -> None:
     usuario = crear_usuario(sesion, rol=Rol.ADMIN)
-    encabezados = _bearer(sesion, usuario)  # el JWT dice ADMIN
+    encabezados = bearer(sesion, usuario)  # el JWT dice ADMIN
     ruta = "/api/v1/_prueba/cargos:gestionar"
     assert api_permisos.get(ruta, headers=encabezados).status_code == 200
 
@@ -225,7 +200,7 @@ def test_el_rol_se_lee_de_la_bd_y_no_del_token(api_permisos: TestClient, sesion:
 def test_me_expone_los_permisos_del_rol(api: TestClient, sesion: Session, rol: Rol) -> None:
     usuario = crear_usuario(sesion, rol=rol)
 
-    respuesta = api.get("/api/v1/me", headers=_bearer(sesion, usuario))
+    respuesta = api.get("/api/v1/me", headers=bearer(sesion, usuario))
 
     assert respuesta.status_code == 200
     permisos = respuesta.json()["permisos"]
@@ -238,7 +213,7 @@ def test_me_con_cambio_pendiente_no_expone_permisos(api: TestClient, sesion: Ses
     # un menú que no puede usar.
     usuario = crear_usuario(sesion, rol=Rol.ADMIN, debe_cambiar_password=True)
 
-    respuesta = api.get("/api/v1/me", headers=_bearer(sesion, usuario))
+    respuesta = api.get("/api/v1/me", headers=bearer(sesion, usuario))
 
     assert respuesta.status_code == 200
     assert respuesta.json()["debe_cambiar_password"] is True
@@ -260,7 +235,7 @@ def test_peticion_autenticada_fija_el_contexto_de_rls(
 ) -> None:
     usuario = crear_usuario(sesion, rol=Rol.FINANCIERO)
 
-    respuesta = api_permisos.get("/api/v1/_prueba/pagos:leer", headers=_bearer(sesion, usuario))
+    respuesta = api_permisos.get("/api/v1/_prueba/pagos:leer", headers=bearer(sesion, usuario))
 
     assert respuesta.status_code == 200
     assert _contexto(sesion) == (str(usuario.id), "FINANCIERO")

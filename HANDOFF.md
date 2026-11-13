@@ -8,12 +8,26 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Sprint 1 en curso** (semana 1 · F1/F2). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 ✅ a S1-09 ✅ (incluida S1-07b)**; **próxima: S1-10** (API de cargos y usuarios), luego S1-11 y S1-13 (S1-12 pasa a la semana 5) |
+| Semana del sprint | Semana 1: **S1-01 ✅ a S1-10 ✅ (incluida S1-07b)**; **próxima: S1-11** (UI de login dual), luego S1-13 (S1-12 pasa a la semana 5) |
 | Código | Esqueleto del backend FastAPI (health, errores, request id, logs) en Docker, con Alembic, roles `trulab_owner`/`trulab_app` y extensiones `citext`/`pgcrypto`; frontend esqueleto (React 18, Vite, TS, Tailwind, shadcn/ui, React Router, TanStack Query) con página temporal; CI en GitHub Actions (4 jobs); modelo de identidad y auditoría (`usuarios`, `cargos`, `celulas`, `sesiones`, `auditoria`) y SUPERADMIN inicial; sin auth, endpoints de negocio ni pantallas funcionales |
 | Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge): S1-01 a S1-07, `f695cbd` (documentación v0.4), `05f46f5` (tarifas oficiales), `eda64a1` (S1-07b), `83cf11c` (proyecto con opción "Otro", ADR-031) y el commit de S1-08 |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S1-10 · API de cargos, usuarios y auditoría (TDD).** Sin migraciones. Contrato en `docs/api-design.md` §5.1, §5.2 y §5.8 (actualizado).
+
+| Endpoint | Comportamiento verificado |
+| :--- | :--- |
+| `/cargos` (GET F A S; POST/PATCH/DELETE A S) | Folio `CA-`, nombre único sin distinguir mayúsculas (`409 DUPLICADO`), borrado lógico reutilizable, `409 EN_USO` si algún usuario lo tiene, auditoría `CARGO_*` con actor; `created_by`/`updated_by` |
+| `GET /usuarios`, `GET /usuarios/{id}` (A S) | Paginado y filtros (`q`, `rol`, `cargo_id`, `celula_id`, `es_prestador_servicios`, `activo`); el listado no lleva cédula ni fecha de nacimiento; nunca `password_hash` ni `google_sub` |
+| `POST /usuarios` | Operativo: contraseña temporal Argon2id **solo por correo**, `debe_cambiar_password = true` (sirve para entrar y obliga a cambiarla). SUPERADMIN: solo por SUPERADMIN (ADMIN → 403), correo `@trulab.co`, sin username ni contraseña, `SUPERADMIN_ASIGNADO` |
+| `PATCH /usuarios/{id}` | Cambio de rol revoca sesiones (`ROL_CAMBIAR`); promover exige correo corporativo y borra credenciales; degradar exige `username`, envía temporal y borra `google_sub`; `409 ULTIMO_SUPERADMIN` con `FOR UPDATE`; ADMIN no toca SUPERADMIN (403) |
+| `POST …/desactivar` · `…/activar` | RN-11: revoca sesiones, idempotente, `409 ACCION_SOBRE_SI_MISMO` (código nuevo), protección del último SUPERADMIN también en el service |
+| `POST …/restablecer-password` | Temporal nueva por correo, quita el bloqueo, revoca sesiones e invalida enlaces de recuperación; SUPERADMIN → `409 SUPERADMIN_SIN_PASSWORD` |
+| `GET /auditoria` (S) | Paginado y filtros; la auditoría de usuarios nunca guarda contraseñas temporales, hashes ni la cédula completa |
+
+Verificación: 511 pruebas (`migrate`), ruff, ruff format, mypy strict, `gen:api`, ESLint, tsc, Prettier, Vitest, build, pre-commit y humo contra la API real (dev login → cargo → usuario → correo en el log). El humo dejó un cargo `Humo …` y un usuario `humo.…` en la BD local.
 
 **2026-11-13 · S1-09 · Matriz RBAC (TDD).** Sin migraciones.
 
@@ -371,13 +385,14 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 - [x] **S1-07b** Credenciales por rol en `usuarios`, `tokens_recuperacion_password`, `Settings` de correo/AWS; 153 pruebas
 - [x] **ADR-031** Proyecto con opción "Otro" (`83cf11c`)
 - [x] **S1-08** Auth híbrida en el backend; 224 pruebas, humo contra la API real
+- [x] **S1-10** API de cargos, usuarios y auditoría; 511 pruebas
 - [x] **S1-09** Matriz RBAC, `require_permission`, `permisos` en `/me`, contexto RLS por transacción; 437 pruebas
 
 ## Trabajo pendiente
 
 - [ ] Integrar `feat/f1-estructura-monorepo` en `main` (push + PR o merge, cuando el usuario lo indique)
 - [ ] Proteger `main` en GitHub (*Settings → Branches*; lo hace el usuario)
-- [ ] Sprint 1: S1-10, S1-11, S1-13 (S1-12 → semana 5)
+- [ ] Sprint 1: S1-11, S1-13 (S1-12 → semana 5)
 - [x] Node 24 LTS aprobado por el dueño del producto como estándar (2026-11-12, ADR-026)
 - [ ] Primera ejecución de la CI en GitHub (requiere push/PR) y proteger `main` con los 4 checks
 - [ ] Semana 0, tareas aún abiertas: P-2 (exportación de **datos** y soportes de AppSheet; ahora también alimenta los catálogos iniciales), P-3 (OAuth Client ID, ahora solo para SUPERADMIN), P-4 (logo y paleta), P-5 (entorno de desarrollo), **P-6 (AWS y SES), P-7 (tarifas y archivos de Apps Script), P-8 (usuarios operativos)**
@@ -387,9 +402,9 @@ Análisis funcional definitivo (DP-13 a DP-18), confirmación de RN-27 y DP-14, 
 
 ## Próxima tarea sugerida
 
-**S1-10** · API de cargos y usuarios (5 h; skills `agent-skills:api-and-interface-design`, `agent-skills:test-driven-development`): proteger cada ruta con `require_permission` (`cargos:leer`, `cargos:gestionar`, `usuarios:gestionar_operativos`, `usuarios:gestionar_superadmin`), contraseña temporal por correo (`Mailer`), crear/promover/degradar SUPERADMIN con protección del último activo (RN-12), auditoría de rol y `SUPERADMIN_ASIGNADO`; fijar `created_by/updated_by` con el usuario autenticado.
+**S1-11** · UI de login dual (7 h; skill `agent-skills:frontend-ui-engineering`): usuario/contraseña + botón Google (y `dev/login` en local), olvidé/restablecer/cambiar contraseña (incluido el cambio obligatorio), `AuthProvider` con access token en memoria y refresh por cookie (`X-Requested-With: trulab-spa`), guardas de ruta y AppShell responsivo con menú según `permisos` de `/me`.
 
-Después **S1-11** (UI de login dual; el menú por rol puede leer `permisos` de `/me`).
+Después **S1-13** (cierre de la semana 1). S1-12 (UI de cargos y usuarios) queda para la semana 5; mientras tanto, ADMIN puede operar por Swagger.
 
 Pendiente con el usuario: push y PR para la primera ejecución real de la CI; proteger `main` con los 4 checks; confirmar las tarifas de Buga, Cumbre y Cali prestador; OAuth Client ID (P-3) y cuenta AWS/SES (P-6).
 

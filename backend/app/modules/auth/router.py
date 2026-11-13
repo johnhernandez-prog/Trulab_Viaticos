@@ -4,13 +4,12 @@ Routers delgados: la lógica está en `service.py`. Aquí solo viven la cookie d
 encabezado anti-CSRF, los límites de peticiones y el envío del correo en segundo plano.
 """
 
-from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
 from app.core.config import Settings
-from app.core.mail import Correo, ErrorEnvioCorreo, Mailer, get_mailer
+from app.core.mail import Mailer, enviar_sin_fallar, get_mailer
 from app.core.rate_limit import limitar
 from app.modules.auth import service
 from app.modules.auth.dependencias import (
@@ -153,14 +152,8 @@ def olvide_password(
 ) -> MensajeSalida:
     correo = service.solicitar_recuperacion(session, datos.identificador, settings, ctx)
     if correo is not None:
-        tareas.add_task(_enviar_sin_revelar, mailer, correo)
+        tareas.add_task(enviar_sin_fallar, mailer, correo)
     return MensajeSalida(detail=MENSAJE_RECUPERACION)
-
-
-def _enviar_sin_revelar(mailer: Mailer, correo: Correo) -> None:
-    # Un fallo de envío ya quedó en el log (Mailer); al usuario se le responde igual siempre.
-    with suppress(ErrorEnvioCorreo):
-        mailer.enviar(correo)
 
 
 @router.post(

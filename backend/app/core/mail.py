@@ -10,6 +10,7 @@ oculta al usuario (en la recuperación de contraseña se oculta, para no revelar
 """
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Protocol
@@ -99,3 +100,10 @@ def crear_mailer(settings: Settings) -> Mailer:
 def get_mailer() -> Mailer:
     """Dependencia de FastAPI (las pruebas la reemplazan por un buzón en memoria)."""
     return crear_mailer(get_settings())
+
+
+def enviar_sin_fallar(mailer: Mailer, correo: Correo) -> None:
+    """Envía en segundo plano (`BackgroundTasks`): un fallo ya quedó en el log del `Mailer` y no
+    cambia la respuesta que recibió el cliente."""
+    with suppress(ErrorEnvioCorreo):
+        mailer.enviar(correo)

@@ -1,10 +1,14 @@
 """Fábricas mínimas para las pruebas de BD (siempre dentro del fixture `sesion`)."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.enums import Rol
+from app.core.security import emitir_access_token
+from app.modules.auth.models import Sesion
 from app.modules.cargos.models import Cargo
 from app.modules.catalogos.models import Celula
 from app.modules.usuarios.models import Usuario
@@ -55,3 +59,26 @@ def crear_celula(session: Session, nombre: str | None = None) -> Celula:
     session.add(celula)
     session.flush()
     return celula
+
+
+def bearer(session: Session, usuario: Usuario) -> dict[str, str]:
+    """Encabezado `Authorization` válido sin pasar por el login (evita el costo de Argon2).
+
+    Crea una sesión vigente en la BD, como haría `/auth/login`.
+    """
+    registro = Sesion(
+        usuario_id=usuario.id,
+        token_hash=uuid.uuid4().hex * 2,  # 64 hex, como un SHA-256
+        expires_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    session.add(registro)
+    session.flush()
+    token, _ = emitir_access_token(
+        usuario_id=usuario.id,
+        sesion_id=registro.id,
+        rol=usuario.rol,
+        cambio_password=usuario.debe_cambiar_password,
+        secreto=get_settings().jwt_secret,
+        ttl=timedelta(minutes=5),
+    )
+    return {"Authorization": f"Bearer {token}"}

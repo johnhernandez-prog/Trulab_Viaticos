@@ -121,3 +121,17 @@ Un cambio de rol debe ajustar las credenciales en la misma operación. `tokens_r
 - `JWT_SECRET` es obligatorio (≥ 32 caracteres): `scripts/crear_env.py` lo genera. `GOOGLE_CLIENT_ID` vacío = `/auth/google` responde 503; en local queda `POST /auth/dev/login` (solo SUPERADMIN, la ruta no existe fuera de `ENV=local`).
 - **Pruebas:** la fixture `api` (`tests/conftest.py`) da un `TestClient` cuya API usa la sesión de prueba revertida, un buzón en memoria (`Buzon`) y un verificador de Google falso (`tokens_google`). Para auditoría, filtrar los eventos de la prueba con `Auditoria.created_at >= func.now()` (la prueba es una sola transacción), porque la BD local puede tener eventos reales.
 - `src/types/api.ts` del frontend se generó con `ENV=local`, así que incluye `/auth/dev/login`; la CI también corre en local, así que el contrato coincide.
+
+## Cargos, usuarios y auditoría (S1-10)
+
+| Pieza | Dónde | Qué hace |
+| :--- | :--- | :--- |
+| Errores comunes | `app/core/errors.py` | `NoEncontrado` (404), `Duplicado` y `EnUso` (409), `ValorNoPermitido` (422) y `error_de_campo()` para `errors[]` |
+| Paginación | `app/core/paginacion.py` | `Paginacion` (dependencia `page`/`size`), `Pagina[T]`, `paginar()`, `orden()` con `sort` cerrado (`Literal`) y `patron_busqueda()` para `ILIKE` sin comodines del usuario |
+| Cargos | `app/modules/cargos/{schemas,service,router}.py` | CRUD con folio `CA-`, nombre único, borrado lógico solo sin usuarios, auditoría `CARGO_*` |
+| Usuarios | `app/modules/usuarios/{schemas,service,router,errores}.py` | Alta de operativos con contraseña temporal por correo, SUPERADMIN solo por SUPERADMIN y con correo corporativo, promoción/degradación, último SUPERADMIN protegido con `FOR UPDATE`, revocación de sesiones al cambiar rol, desactivar o restablecer |
+| Auditoría | `app/modules/auditoria/router.py` | `GET /auditoria` (solo SUPERADMIN) |
+
+- Los services hacen `commit` y devuelven los correos (`Resultado.correos`); el router los envía con `BackgroundTasks` y `enviar_sin_fallar` (`app/core/mail.py`), después del commit.
+- Al cambiar el rol, **primero** se fija `usuario.rol` y luego las credenciales: cualquier consulta intermedia hace autoflush y los `CHECK` por rol verían una fila incoherente.
+- Pruebas: `tests/fabricas.py::bearer()` crea una sesión y un access token sin pasar por el login (sin costo de Argon2). La BD local tiene el SUPERADMIN del seed: las pruebas de "último SUPERADMIN" desactivan a los demás dentro de su transacción.

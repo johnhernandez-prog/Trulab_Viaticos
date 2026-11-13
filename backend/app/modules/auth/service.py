@@ -342,7 +342,7 @@ def _validar_politica(password: str, usuario: Usuario) -> None:
         )
 
 
-def _invalidar_tokens(session: Session, usuario_id: uuid.UUID) -> None:
+def invalidar_tokens_recuperacion(session: Session, usuario_id: uuid.UUID) -> None:
     session.execute(
         update(TokenRecuperacionPassword)
         .where(
@@ -380,7 +380,7 @@ def solicitar_recuperacion(
         session.commit()
         return None
 
-    _invalidar_tokens(session, usuario.id)
+    invalidar_tokens_recuperacion(session, usuario.id)
     token = token_opaco()
     minutos = settings.password_reset_ttl_minutes
     session.add(
@@ -442,7 +442,7 @@ def restablecer_password(session: Session, token: str, nueva: str, ctx: Contexto
     _validar_politica(nueva, usuario)
 
     registro.used_at = _ahora()
-    _invalidar_tokens(session, usuario.id)
+    invalidar_tokens_recuperacion(session, usuario.id)
     _fijar_password(usuario, nueva)
     revocar_sesiones(session, usuario.id)
     _auditar(
