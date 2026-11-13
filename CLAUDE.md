@@ -128,7 +128,9 @@ Se confirmaron contra la configuración real de AppSheet y de Apps Script. Solo 
 
 **S2-02 terminada** (2026-11-13): migración `2c36be2a3312` con `proyectos`, `rubros`, `tarifas_viaticos` (seed de 44 filas leído del CSV), `archivos`, `viaticos` (`VT-`, `valor_transferido` generado), `viatico_trayectos`, `viatico_eventos` (solo inserción con trigger), `gastos` y `v_viatico_saldos`; modelos en `app/modules/{catalogos,archivos,viaticos,gastos}/models.py` y enums en `app/core/enums.py`.
 
-**S2-01 terminada** (2026-11-13): API de `/catalogos` (selectores activos para V F A S; administración con `uso` informativo, crear, editar, activar/desactivar sin `DELETE`, solo SUPERADMIN) y `/catalogos/tarifas-viaticos` (lectura F A S; gestión solo SUPERADMIN, dinero como string con `app/core/types.py::Dinero`, ADR-012). Auditoría `CATALOGO_*`/`TARIFA_*`. **641 pruebas** en verde. **Próxima: S2-03 (RLS sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos`, con pruebas de aislamiento reales usando `trulab_app`)**.
+**S2-01 terminada** (2026-11-13): API de `/catalogos` (selectores activos para V F A S; administración con `uso` informativo, crear, editar, activar/desactivar sin `DELETE`, solo SUPERADMIN) y `/catalogos/tarifas-viaticos` (lectura F A S; gestión solo SUPERADMIN, dinero como string con `app/core/types.py::Dinero`, ADR-012). Auditoría `CATALOGO_*`/`TARIFA_*`. **641 pruebas** en verde.
+
+**S2-03 terminada** (2026-11-13): RLS real sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos` (migración `7d7db0ebc91e`), política `ver_propios_o_privilegiado` por tabla (`FOR ALL TO trulab_app`; sin `FORCE`, decisión documentada en `docs/database-design.md` §6 para no bloquear a `trulab_owner`); `NULLIF(..., '')` ante los GUC vacíos de PostgreSQL. **663 pruebas** en verde (22 nuevas en `tests/test_rls.py`, con aislamiento por SQL directo y por HTTP). **Próxima: S2-04 (servicio de cálculo tarifario, RN-29/RN-30, y `POST /viaticos/calcular-presupuesto`)**.
 
 ## Cómo retomar
 

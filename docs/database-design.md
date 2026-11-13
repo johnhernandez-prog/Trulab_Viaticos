@@ -466,24 +466,29 @@ Todas las FK llevan índice.
 
 1. Roles de BD: `trulab_owner` (migraciones) y `trulab_app` (la API, sin `BYPASSRLS` ni propiedad). En RDS, `rds_superuser` solo se usa para el arranque.
 2. En cada transacción: `SET LOCAL app.usuario_id = '<uuid>'; SET LOCAL app.rol = '<ROL>';`. **Implementado en S1-09:** `app/core/db.py::fijar_contexto_rls()` (llamada por la autenticación de cada petición) usa `set_config(..., true)` en la transacción actual y un evento `after_begin` lo reaplica en cada transacción nueva de la sesión; el valor nunca queda en una conexión del pool.
-3. RLS en `viaticos`, `viatico_trayectos` y `gastos` (`ENABLE` + `FORCE`).
-4. Políticas:
+3. **Implementado en S2-03:** RLS en `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos` (`ENABLE`, **sin** `FORCE`: ver la nota siguiente).
+4. Políticas (una por tabla, `ver_propios_o_privilegiado`, `FOR ALL TO trulab_app`; `USING` y `WITH CHECK` con la misma condición):
 
 ```
 -- viaticos
-POLICY ver_propios_o_privilegiado FOR ALL TO trulab_app
-  USING ( current_setting('app.rol', true) IN ('FINANCIERO','ADMIN','SUPERADMIN')
-          OR usuario_id = current_setting('app.usuario_id', true)::uuid )
-  WITH CHECK (misma condición);
+  current_setting('app.rol', true) IN ('FINANCIERO','ADMIN','SUPERADMIN')
+  OR usuario_id = NULLIF(current_setting('app.usuario_id', true), '')::uuid
 
--- viatico_trayectos y gastos: se apoyan en la visibilidad del viático
-POLICY ... USING (EXISTS (SELECT 1 FROM viaticos v WHERE v.id = <tabla>.viatico_id))
+-- viatico_trayectos, viatico_eventos y gastos: se apoyan en la visibilidad del viático padre
+  current_setting('app.rol', true) IN ('FINANCIERO','ADMIN','SUPERADMIN')
+  OR EXISTS (SELECT 1 FROM viaticos v WHERE v.id = <tabla>.viatico_id AND v.usuario_id = NULLIF(...)::uuid)
+
+-- archivos: no tiene usuario_id/viatico_id directo (lo referencian viaticos, gastos y
+-- usuarios.firma_archivo_id); se usa quien lo subió
+  current_setting('app.rol', true) IN ('FINANCIERO','ADMIN','SUPERADMIN')
+  OR created_by = NULLIF(current_setting('app.usuario_id', true), '')::uuid
 ```
 
-5. Sin variables definidas, `current_setting(..., true)` es `NULL` y la política deniega.
-6. **Login:** la autenticación consulta `usuarios` **antes** de existir un contexto de usuario. `usuarios`, `sesiones` y `tokens_recuperacion_password` **no llevan RLS** (el acceso se controla en el service y por privilegios). Si más adelante se quiere RLS en `usuarios`, el login deberá usar una función `SECURITY DEFINER` acotada (ADR futuro).
-7. Catálogos y `tarifas_viaticos` sin RLS: todos los roles leen; la escritura (solo SUPERADMIN) se controla en el service.
-8. **Pruebas:** con `trulab_app` y `app.rol='VIAJERO'`, un `SELECT` sin `WHERE` devuelve solo filas propias.
+5. Sin variables definidas, `current_setting(..., true)` **no siempre da `NULL`**: un `app.*` que nunca se fijó en la conexión (o que ya salió de su `SET LOCAL`) puede dar cadena vacía (particularidad de los GUC de marcador de posición de PostgreSQL); por eso las políticas usan `NULLIF(..., '')` antes de convertir a `uuid` (sin eso, `''::uuid` lanza un error en vez de simplemente negar el acceso). Sin contexto, la condición de propiedad queda en `NULL` (falso) y la política deniega.
+6. **Sin `FORCE ROW LEVEL SECURITY` (decisión de S2-03):** las políticas son `TO trulab_app`; `trulab_owner` —dueño de las tablas, nunca usado por la API— sigue bypaseando RLS como cualquier dueño de tabla en PostgreSQL, igual que antes de S2-03. Así las migraciones y las pruebas de `test_migraciones.py` que insertan filas de prueba con `trulab_owner` (para probar el trigger de solo inserción de `viatico_eventos`) no necesitan una política para el dueño, y el ETL (F10) no choca con RLS. `trulab_app` —el único rol que la API usa— queda sujeto a las políticas con o sin `FORCE`: ese es el actor real que protege RN-01 (ADR-007). Si se necesita `FORCE` en el futuro (por ejemplo, para impedir un uso directo accidental de `trulab_owner`), se agrega en un ADR aparte.
+7. **Login:** la autenticación consulta `usuarios` **antes** de existir un contexto de usuario. `usuarios`, `sesiones` y `tokens_recuperacion_password` **no llevan RLS** (el acceso se controla en el service y por privilegios). Si más adelante se quiere RLS en `usuarios`, el login deberá usar una función `SECURITY DEFINER` acotada (ADR futuro).
+8. Catálogos y `tarifas_viaticos` sin RLS: todos los roles leen; la escritura (solo SUPERADMIN) se controla en el service.
+9. **Pruebas (S2-03, `tests/test_rls.py`):** con `trulab_app` y el contexto fijado por `fijar_contexto_rls()` (igual que en una petición real), un `SELECT` sin `WHERE` sobre cada una de las cinco tablas devuelve solo las filas propias de un VIAJERO y todas para FINANCIERO/ADMIN/SUPERADMIN; un `INSERT` a nombre de otro usuario (o sobre un viático ajeno) falla con "row-level security"; se prueba también con SQL directo (sin ORM) y de punta a punta por HTTP (con una ruta de prueba, porque `GET /viaticos` real llega en S2-05).
 
 > RLS no reemplaza las reglas de estado, etapa ni de rol (RN-19, RN-20, RN-22, RN-27), que viven en el service y en su prueba RBAC.
 

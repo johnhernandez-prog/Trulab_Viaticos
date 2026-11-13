@@ -8,12 +8,27 @@
 | Campo | Valor |
 | :--- | :--- |
 | Fase | **Semana 1 cerrada (gate cumplido el 2026-11-13)**; **semana 2 en curso** (F4/F5). Documentación **actualizada a SPEC v0.4 el 2026-11-12** (sin código) y de nuevo congelada |
-| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-01 ✅ y S2-02 ✅** (catálogos, tarifas y el modelo unificado); **próxima: S2-03 (RLS sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos`)** |
-| Código | Backend: esqueleto FastAPI + Alembic + roles de BD; auth híbrida completa (S1-08); RBAC de 24 permisos (S1-09); API de `/cargos`, `/usuarios`, `/auditoria` (S1-10); modelo unificado de `viaticos`/`gastos`/`archivos`/catálogos/tarifas (S2-02); **API de `/catalogos` y `/catalogos/tarifas-viaticos` (S2-01)**. Frontend: login dual, `AuthProvider`, guardas y AppShell responsivo (S1-11); sin pantallas de catálogos/tarifas ni de viáticos todavía |
-| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge), hasta `07e214c` (S2-02); **pendiente de commit: S2-01** (API de catálogos y tarifas) |
+| Semana del sprint | Semana 1: **S1-01 a S1-13 ✅** (S1-12 → semana 5). Semana 2: **S2-01 ✅, S2-02 ✅ y S2-03 ✅** (catálogos, tarifas, el modelo unificado y RLS); **próxima: S2-04 (servicio de cálculo tarifario, RN-29/RN-30, y `POST /viaticos/calcular-presupuesto`)** |
+| Código | Backend: esqueleto FastAPI + Alembic + roles de BD; auth híbrida completa (S1-08); RBAC de 24 permisos (S1-09); API de `/cargos`, `/usuarios`, `/auditoria` (S1-10); modelo unificado de `viaticos`/`gastos`/`archivos`/catálogos/tarifas (S2-02); API de `/catalogos` y `/catalogos/tarifas-viaticos` (S2-01); **RLS real sobre `viaticos`, `viatico_trayectos`, `viatico_eventos`, `gastos` y `archivos` (S2-03)**. Frontend: login dual, `AuthProvider`, guardas y AppShell responsivo (S1-11); sin pantallas de catálogos/tarifas ni de viáticos todavía |
+| Repositorio | `main` = `origin/main` = `62b91cf` (baseline anterior). En la rama **`feat/f1-estructura-monorepo`** (sin push ni merge), hasta `25173b6` (S2-01); **pendiente de commit: S2-03** (RLS) |
 | Última actualización | 2026-11-13 |
 
 ## Última actividad
+
+**2026-11-13 · S2-03 · RLS real sobre viáticos, trayectos, eventos, gastos y archivos (TDD).** Migración `7d7db0ebc91e` (`20261113_1620_rls_viaticos_gastos_archivos`) sobre `2c36be2a3312`. Contrato en `docs/database-design.md` §6 (reescrita).
+
+| Tabla | Política `ver_propios_o_privilegiado` (`FOR ALL TO trulab_app`) |
+| :--- | :--- |
+| `viaticos` | Privilegiado (F/A/S) **o** `usuario_id` propio |
+| `viatico_trayectos`, `viatico_eventos`, `gastos` | Privilegiado **o** `EXISTS` un `viaticos` padre propio (`viatico_id`) |
+| `archivos` | Privilegiado **o** `created_by` propio (no tiene `usuario_id`/`viatico_id` directo: lo referencian `viaticos`, `gastos` y `usuarios.firma_archivo_id`) |
+
+- **Sin `FORCE ROW LEVEL SECURITY`** (decisión documentada en el `database-design.md` y en la migración): sin `FORCE`, `trulab_owner` —dueño de las tablas, nunca usado por la API— sigue bypaseando RLS como cualquier dueño de tabla; `trulab_app` —el único rol que la API usa— **siempre** queda sujeto a las políticas, con o sin `FORCE`. Así `test_migraciones.py` (S2-02) conserva su capacidad de insertar con `trulab_owner` para probar el trigger de solo inserción de `viatico_eventos`, y el ETL de F10 no choca con RLS.
+- **`NULLIF(current_setting('app.usuario_id', true), '')::uuid`** en vez de un `::uuid` directo: un `app.*` que nunca se fijó en la conexión (o que ya salió de su `SET LOCAL`) puede devolver cadena vacía, no `NULL` (particularidad de los GUC de marcador de posición de PostgreSQL); sin el `NULLIF`, un `SELECT`/`INSERT` sin contexto fallaba con `invalid input syntax for type uuid: ""` en vez de simplemente negar el acceso.
+- **Fixture `sesion` (S2-03):** ahora fija un contexto **privilegiado** por defecto (`SUPERADMIN`, `tests/conftest.py`) justo al crear la sesión, para que las ~600 pruebas que usan `tests/fabricas.py` directamente (sin pasar por una petición HTTP) sigan insertando sin que RLS las bloquee. Las pruebas de aislamiento (`tests/test_rls.py`) sobrescriben el contexto con `fijar_contexto_rls(sesion, usuario.id, rol)` antes de afirmar lo que ve un VIAJERO.
+- **Pruebas (`tests/test_rls.py`, 22 nuevas):** por cada una de las cinco tablas, un VIAJERO solo ve/inserta lo propio (`SELECT` sin `WHERE` filtrado por RLS, `INSERT` a nombre de otro → `ProgrammingError` "row-level security"); FINANCIERO/ADMIN/SUPERADMIN ven todo; sin contexto no se ve nada; una prueba con SQL directo (`text("SELECT id FROM viaticos")`, sin ORM); dos pruebas de punta a punta por HTTP con una ruta de prueba (`/api/v1/_prueba_rls/viaticos`, igual que `api_permisos` en `test_permisos.py`) porque `GET /viaticos` real todavía no existe (llega en S2-05).
+
+**Validaciones de S2-03:** ida y vuelta de la migración (`upgrade` → `downgrade -1` → `upgrade head`), `alembic check` sin diferencias; **663 pruebas** (641 + 22 nuevas) en `migrate`; ruff, `ruff format`, mypy strict y `pre-commit run --all-files` en verde. Sin cambios en la API: los tipos TS no cambian (la ruta de prueba de RLS no se registra en `main.py`, solo existe dentro del fixture del test).
 
 **2026-11-13 · S2-01 · API de `/catalogos` y `/catalogos/tarifas-viaticos` (TDD).** Sin migraciones nuevas (el modelo y el seed son de S2-02). Contrato en `docs/api-design.md` §5.3 (actualizado, con "Implementado en S2-01").
 

@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Iterator
 from typing import Any
 
@@ -7,11 +8,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
-from app.core.db import get_db, get_engine
+from app.core.db import fijar_contexto_rls, get_db, get_engine
+from app.core.enums import Rol
 from app.core.mail import Correo, get_mailer
 from app.main import create_app
 from app.modules.auth.errores import NoAutenticado
 from app.modules.auth.google import get_verificador_google
+
+# Contexto de RLS por defecto de `sesion` (S2-03): privilegiado (SUPERADMIN), para que las
+# fábricas de `tests/fabricas.py` puedan insertar sin pasar antes por una petición autenticada.
+# Las pruebas de aislamiento (RN-01) lo sobrescriben con `fijar_contexto_rls(sesion, ...)` antes
+# de afirmar lo que ve un VIAJERO.
+_USUARIO_CONFTEST = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 @pytest.fixture
@@ -36,6 +44,7 @@ def sesion() -> Iterator[Session]:
     conexion = get_engine().connect()
     transaccion = conexion.begin()
     session = Session(bind=conexion, join_transaction_mode="create_savepoint")
+    fijar_contexto_rls(session, _USUARIO_CONFTEST, Rol.SUPERADMIN)
     try:
         yield session
     finally:
