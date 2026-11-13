@@ -437,6 +437,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/viaticos/calcular-presupuesto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vista previa del presupuesto tarifario, sin guardar (RN-29) */
+        post: operations["calcular_presupuesto_api_v1_viaticos_calcular_presupuesto_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear un viático: CON_SOLICITUD o LEGALIZACION_DIRECTA (ADR-029) */
+        post: operations["crear_api_v1_viaticos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un viático (dueño, FINANCIERO, ADMIN, SUPERADMIN) */
+        get: operations["detalle_api_v1_viaticos__viatico_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auditoria": {
         parameters: {
             query?: never;
@@ -475,6 +526,30 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CalcularPresupuestoEntrada */
+        CalcularPresupuestoEntrada: {
+            /** Proyecto Id */
+            proyecto_id?: string | null;
+            /** Proyecto Otro */
+            proyecto_otro?: string | null;
+            /** Requiere Gastos Viaje */
+            requiere_gastos_viaje: boolean;
+            /** Trayectos */
+            trayectos: components["schemas"]["TrayectoEntradaSchema"][];
+        };
+        /** CalculoPresupuestoSalida */
+        CalculoPresupuestoSalida: {
+            /** Aplica */
+            aplica: boolean;
+            /** Motivo No Aplica */
+            motivo_no_aplica: string | null;
+            /** Trayectos */
+            trayectos: components["schemas"]["TrayectoSalida"][];
+            /** Presupuesto Solicitado */
+            presupuesto_solicitado: string | null;
+            /** Exige Formato Prestador */
+            exige_formato_prestador: boolean;
+        };
         /** CambiarPasswordEntrada */
         CambiarPasswordEntrada: {
             /** Password Actual */
@@ -603,11 +678,39 @@ export interface components {
             /** Ciudades */
             ciudades: string[];
         };
+        /** ColaboradorSalida */
+        ColaboradorSalida: {
+            /** Nombre */
+            nombre: string;
+            /** Cargo */
+            cargo: string | null;
+            /** Celula */
+            celula: string | null;
+            /** Es Prestador Servicios */
+            es_prestador_servicios: boolean;
+        };
         /** DevLoginEntrada */
         DevLoginEntrada: {
             /** Correo */
             correo: string;
         };
+        /**
+         * EstadoFinanciero
+         * @description `viaticos.estado_financiero` (AppSheet `Estado_P`): FINANCIERO/SUPERADMIN (DP-13).
+         * @enum {string}
+         */
+        EstadoFinanciero: "PENDIENTE" | "TRANSFERIDO" | "PAGADO" | "PROCESADO";
+        /**
+         * EstadoOperativo
+         * @description `viaticos.estado` (AppSheet `Estado`): lo cambian ADMIN/SUPERADMIN (DP-13).
+         * @enum {string}
+         */
+        EstadoOperativo: "PENDIENTE" | "APROBADO" | "RECHAZADO";
+        /**
+         * Etapa
+         * @enum {string}
+         */
+        Etapa: "SOLICITUD" | "LEGALIZACION";
         /** EventoAuditoria */
         EventoAuditoria: {
             /** Id */
@@ -624,6 +727,35 @@ export interface components {
             datos: Record<string, never>;
             /** Ip */
             ip: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** EventoSalida */
+        EventoSalida: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            etapa: components["schemas"]["Etapa"];
+            /** Accion */
+            accion: string;
+            /** Dimension */
+            dimension: string | null;
+            /** Estado Anterior */
+            estado_anterior: string | null;
+            /** Estado Nuevo */
+            estado_nuevo: string | null;
+            /** Comentario */
+            comentario: string | null;
+            /**
+             * Usuario Id
+             * Format: uuid
+             */
+            usuario_id: string;
             /**
              * Created At
              * Format: date-time
@@ -652,6 +784,12 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * Modalidad
+         * @description Cómo nace el viático (ADR-029). Inmutable.
+         * @enum {string}
+         */
+        Modalidad: "CON_SOLICITUD" | "LEGALIZACION_DIRECTA";
         /** OlvidePasswordEntrada */
         OlvidePasswordEntrada: {
             /** Identificador */
@@ -707,6 +845,15 @@ export interface components {
          * @enum {string}
          */
         Permiso: "viaticos:leer_propios" | "viaticos:crear" | "viaticos:calcular_presupuesto" | "viaticos:habilitar_legalizacion" | "gastos:gestionar_propios" | "catalogos:leer" | "viaticos:leer_todos" | "comprobantes:leer_todos" | "pagos:leer" | "cargos:leer" | "tarifas:leer" | "indicadores:leer" | "viaticos:aprobar" | "viaticos:rechazar" | "viaticos:devolver" | "viaticos:gestionar_tiquetes" | "viaticos:registrar_valor_asignado" | "viaticos:cambiar_estado_financiero" | "cargos:gestionar" | "usuarios:gestionar_operativos" | "usuarios:gestionar_superadmin" | "catalogos:gestionar" | "tarifas:gestionar" | "auditoria:leer";
+        /** ProyectoRefSalida */
+        ProyectoRefSalida: {
+            /** Id */
+            id: string | null;
+            /** Nombre */
+            nombre: string;
+            /** En Catalogo */
+            en_catalogo: boolean;
+        };
         /** Referencia */
         Referencia: {
             /**
@@ -759,6 +906,24 @@ export interface components {
             /** Debe Cambiar Password */
             debe_cambiar_password: boolean;
             usuario: components["schemas"]["UsuarioActualSalida"];
+        };
+        /** SolicitudSalida */
+        SolicitudSalida: {
+            proyecto: components["schemas"]["ProyectoRefSalida"];
+            /** Lider Proyecto */
+            lider_proyecto: string;
+            /** Empresa */
+            empresa: string | null;
+            /** Requiere Tiquete */
+            requiere_tiquete: boolean;
+            /** Requiere Gastos Viaje */
+            requiere_gastos_viaje: boolean;
+            /** Presupuesto Solicitado */
+            presupuesto_solicitado: string | null;
+            /** Comentarios */
+            comentarios: string | null;
+            /** Trayectos */
+            trayectos: components["schemas"]["TrayectoSalida"][];
         };
         /** TarifaCrear */
         TarifaCrear: {
@@ -838,6 +1003,67 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** TrayectoEntradaSchema */
+        TrayectoEntradaSchema: {
+            /** Orden */
+            orden: number;
+            /** Ciudad Origen */
+            ciudad_origen: string;
+            /** Ciudad Destino */
+            ciudad_destino: string;
+            /**
+             * Fecha Ida
+             * Format: date-time
+             */
+            fecha_ida: string;
+            /**
+             * Fecha Regreso
+             * Format: date-time
+             */
+            fecha_regreso: string;
+            /**
+             * Requiere Hospedaje
+             * @default false
+             */
+            requiere_hospedaje: boolean;
+            /** Dias Estadia */
+            dias_estadia: number;
+        };
+        /** TrayectoSalida */
+        TrayectoSalida: {
+            /** Orden */
+            orden: number;
+            /** Ciudad Origen */
+            ciudad_origen: string;
+            /** Ciudad Destino */
+            ciudad_destino: string;
+            /**
+             * Fecha Ida
+             * Format: date-time
+             */
+            fecha_ida: string;
+            /**
+             * Fecha Regreso
+             * Format: date-time
+             */
+            fecha_regreso: string;
+            /** Requiere Hospedaje */
+            requiere_hospedaje: boolean;
+            /** Dias Estadia */
+            dias_estadia: number;
+            /** Vr Alimentacion */
+            vr_alimentacion: string | null;
+            /** Otros Gastos */
+            otros_gastos: string | null;
+            /** Trans Interno */
+            trans_interno: string | null;
+            /** Transporte Aeropuerto */
+            transporte_aeropuerto: string | null;
+            /** Transporte Intermunicipal */
+            transporte_intermunicipal: string | null;
+            /** Subtotal Estadia */
+            subtotal_estadia: string | null;
         };
         /** UsuarioActualSalida */
         UsuarioActualSalida: {
@@ -992,6 +1218,103 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** ViaticoCrearConSolicitud */
+        ViaticoCrearConSolicitud: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            modalidad: "CON_SOLICITUD";
+            /** Motivo Viaje */
+            motivo_viaje: string;
+            /** Proyecto Id */
+            proyecto_id?: string | null;
+            /** Proyecto Otro */
+            proyecto_otro?: string | null;
+            /** Lider Proyecto */
+            lider_proyecto: string;
+            /** Empresa */
+            empresa?: string | null;
+            /**
+             * Requiere Tiquete
+             * @default false
+             */
+            requiere_tiquete: boolean;
+            /**
+             * Requiere Gastos Viaje
+             * @default false
+             */
+            requiere_gastos_viaje: boolean;
+            /** Comentarios */
+            comentarios?: string | null;
+            /** Trayectos */
+            trayectos: components["schemas"]["TrayectoEntradaSchema"][];
+        };
+        /** ViaticoCrearLegalizacionDirecta */
+        ViaticoCrearLegalizacionDirecta: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            modalidad: "LEGALIZACION_DIRECTA";
+            /** Motivo Viaje */
+            motivo_viaje: string;
+            /**
+             * Recursos Propios
+             * @default false
+             */
+            recursos_propios: boolean;
+        };
+        /** ViaticoDetalle */
+        ViaticoDetalle: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Folio */
+            folio: string;
+            modalidad: components["schemas"]["Modalidad"];
+            etapa: components["schemas"]["Etapa"];
+            estado: components["schemas"]["EstadoOperativo"];
+            estado_financiero: components["schemas"]["EstadoFinanciero"];
+            /** Devuelta At */
+            devuelta_at: string | null;
+            usuario: components["schemas"]["Referencia"];
+            colaborador: components["schemas"]["ColaboradorSalida"];
+            /** Motivo Viaje */
+            motivo_viaje: string;
+            solicitud: components["schemas"]["SolicitudSalida"] | null;
+            /**
+             * Fecha Legalizacion
+             * Format: date
+             */
+            fecha_legalizacion: string;
+            /** Recursos Propios */
+            recursos_propios: boolean;
+            /** Valor Asignado */
+            valor_asignado: string;
+            /** Valor Transferido */
+            valor_transferido: string;
+            /** Total Gastos */
+            total_gastos: string;
+            /** Saldo */
+            saldo: string;
+            /** Acciones Permitidas */
+            acciones_permitidas: string[];
+            /** Eventos */
+            eventos: components["schemas"]["EventoSalida"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
     };
     responses: never;
@@ -2025,6 +2348,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogoResumen"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calcular_presupuesto_api_v1_viaticos_calcular_presupuesto_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalcularPresupuestoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalculoPresupuestoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_api_v1_viaticos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViaticoCrearConSolicitud"] | components["schemas"]["ViaticoCrearLegalizacionDirecta"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_api_v1_viaticos__viatico_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
                 };
             };
             /** @description Validation Error */
