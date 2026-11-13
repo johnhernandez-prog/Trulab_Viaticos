@@ -437,6 +437,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/viaticos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar viáticos (propios para VIAJERO; todos para FINANCIERO/ADMIN/SUPERADMIN) */
+        get: operations["listar_api_v1_viaticos_get"];
+        put?: never;
+        /** Crear un viático: CON_SOLICITUD o LEGALIZACION_DIRECTA (ADR-029) */
+        post: operations["crear_api_v1_viaticos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/viaticos/calcular-presupuesto": {
         parameters: {
             query?: never;
@@ -454,23 +472,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/viaticos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Crear un viático: CON_SOLICITUD o LEGALIZACION_DIRECTA (ADR-029) */
-        post: operations["crear_api_v1_viaticos_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/viaticos/{viatico_id}": {
         parameters: {
             query?: never;
@@ -482,6 +483,76 @@ export interface paths {
         get: operations["detalle_api_v1_viaticos__viatico_id__get"];
         put?: never;
         post?: never;
+        /** Eliminar un viático (lógico; dueño o SUPERADMIN, solo PENDIENTE/PENDIENTE; RN-09) */
+        delete: operations["eliminar_api_v1_viaticos__viatico_id__delete"];
+        options?: never;
+        head?: never;
+        /** Editar un viático (dueño o SUPERADMIN, solo PENDIENTE/PENDIENTE; RN-09, S-05) */
+        patch: operations["editar_api_v1_viaticos__viatico_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/aprobar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aprobar un viático (ADMIN, SUPERADMIN; RN-06, RN-21, RN-27) */
+        post: operations["aprobar_api_v1_viaticos__viatico_id__aprobar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/rechazar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar un viático, estado final (ADMIN, SUPERADMIN; RN-27) */
+        post: operations["rechazar_api_v1_viaticos__viatico_id__rechazar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/devolver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Devolver un viático a PENDIENTE (ADMIN, SUPERADMIN; RN-20, RN-27) */
+        post: operations["devolver_api_v1_viaticos__viatico_id__devolver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/viaticos/{viatico_id}/habilitar-legalizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pasar la solicitud aprobada a la etapa LEGALIZACION (dueño, SUPERADMIN; RN-28) */
+        post: operations["habilitar_legalizacion_api_v1_viaticos__viatico_id__habilitar_legalizacion_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -526,6 +597,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccionEntrada
+         * @description Cuerpo de `aprobar`/`rechazar`/`devolver`: el comentario es obligatorio solo para rechazar
+         *     y devolver (el service lo valida, `422 COMENTARIO_REQUERIDO`, para dar ese código exacto).
+         */
+        AccionEntrada: {
+            /** Comentario */
+            comentario?: string | null;
+        };
         /** CalcularPresupuestoEntrada */
         CalcularPresupuestoEntrada: {
             /** Proyecto Id */
@@ -832,6 +912,17 @@ export interface components {
         Pagina_UsuarioResumen_: {
             /** Items */
             items: components["schemas"]["UsuarioResumen"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Size */
+            size: number;
+        };
+        /** Pagina[ViaticoResumen] */
+        Pagina_ViaticoResumen_: {
+            /** Items */
+            items: components["schemas"]["ViaticoResumen"][];
             /** Total */
             total: number;
             /** Page */
@@ -1315,6 +1406,74 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * ViaticoEditar
+         * @description Edición parcial: solo cambian los campos enviados. El service decide, según la etapa
+         *     actual del viático, cuáles aplican (`422 VALOR_NO_PERMITIDO` para el resto).
+         */
+        ViaticoEditar: {
+            /** Motivo Viaje */
+            motivo_viaje?: string | null;
+            /** Proyecto Id */
+            proyecto_id?: string | null;
+            /** Proyecto Otro */
+            proyecto_otro?: string | null;
+            /** Lider Proyecto */
+            lider_proyecto?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Requiere Tiquete */
+            requiere_tiquete?: boolean | null;
+            /** Requiere Gastos Viaje */
+            requiere_gastos_viaje?: boolean | null;
+            /** Comentarios */
+            comentarios?: string | null;
+            /** Trayectos */
+            trayectos?: components["schemas"]["TrayectoEntradaSchema"][] | null;
+            /** Recursos Propios */
+            recursos_propios?: boolean | null;
+        };
+        /** ViaticoResumen */
+        ViaticoResumen: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Folio */
+            folio: string;
+            modalidad: components["schemas"]["Modalidad"];
+            etapa: components["schemas"]["Etapa"];
+            estado: components["schemas"]["EstadoOperativo"];
+            estado_financiero: components["schemas"]["EstadoFinanciero"];
+            usuario: components["schemas"]["Referencia"];
+            /** Motivo Viaje */
+            motivo_viaje: string;
+            /**
+             * Fecha Legalizacion
+             * Format: date
+             */
+            fecha_legalizacion: string;
+            /** Recursos Propios */
+            recursos_propios: boolean;
+            /** Valor Asignado */
+            valor_asignado: string;
+            /** Valor Transferido */
+            valor_transferido: string;
+            /** Presupuesto Solicitado */
+            presupuesto_solicitado: string | null;
+            /** Total Gastos */
+            total_gastos: string;
+            /** Saldo */
+            saldo: string;
+            /** Acciones Permitidas */
+            acciones_permitidas: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
     };
     responses: never;
@@ -2361,18 +2520,29 @@ export interface operations {
             };
         };
     };
-    calcular_presupuesto_api_v1_viaticos_calcular_presupuesto_post: {
+    listar_api_v1_viaticos_get: {
         parameters: {
-            query?: never;
+            query?: {
+                etapa?: components["schemas"]["Etapa"] | null;
+                estado?: components["schemas"]["EstadoOperativo"] | null;
+                estado_financiero?: components["schemas"]["EstadoFinanciero"] | null;
+                modalidad?: components["schemas"]["Modalidad"] | null;
+                proyecto_id?: string | null;
+                usuario_id?: string | null;
+                desde?: string | null;
+                hasta?: string | null;
+                /** @description Busca en folio y motivo */
+                q?: string | null;
+                /** @description Página, desde 1 */
+                page?: number;
+                /** @description Tamaño de página (máx. 100) */
+                size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CalcularPresupuestoEntrada"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -2380,7 +2550,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CalculoPresupuestoSalida"];
+                    "application/json": components["schemas"]["Pagina_ViaticoResumen_"];
                 };
             };
             /** @description Validation Error */
@@ -2427,7 +2597,240 @@ export interface operations {
             };
         };
     };
+    calcular_presupuesto_api_v1_viaticos_calcular_presupuesto_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalcularPresupuestoEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalculoPresupuestoSalida"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     detalle_api_v1_viaticos__viatico_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    eliminar_api_v1_viaticos__viatico_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editar_api_v1_viaticos__viatico_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViaticoEditar"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aprobar_api_v1_viaticos__viatico_id__aprobar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccionEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rechazar_api_v1_viaticos__viatico_id__rechazar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccionEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    devolver_api_v1_viaticos__viatico_id__devolver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                viatico_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccionEntrada"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViaticoDetalle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    habilitar_legalizacion_api_v1_viaticos__viatico_id__habilitar_legalizacion_post: {
         parameters: {
             query?: never;
             header?: never;

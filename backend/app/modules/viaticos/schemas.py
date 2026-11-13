@@ -29,6 +29,7 @@ Ciudad = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, m
 ProyectoOtro = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=3, max_length=150)
 ]
+Comentario = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 
 
 # --- trayectos (comunes al cálculo y a la solicitud) ----------------------------------------------
@@ -179,3 +180,61 @@ class ViaticoDetalle(BaseModel):
     eventos: list[EventoSalida]
     created_at: datetime
     updated_at: datetime
+
+
+# --- GET /viaticos (listado paginado, S2-05) ----------------------------------------------------
+
+
+class ViaticoResumen(BaseModel):
+    id: uuid.UUID
+    folio: str
+    modalidad: Modalidad
+    etapa: Etapa
+    estado: EstadoOperativo
+    estado_financiero: EstadoFinanciero
+    usuario: Referencia
+    motivo_viaje: str
+    fecha_legalizacion: date
+    recursos_propios: bool
+    valor_asignado: Dinero
+    valor_transferido: Dinero
+    presupuesto_solicitado: Dinero | None
+    total_gastos: Dinero
+    saldo: Dinero
+    acciones_permitidas: list[str]
+    created_at: datetime
+
+
+# --- PATCH /viaticos/{id} (S2-05: dueño o SUPERADMIN, PENDIENTE/PENDIENTE, RN-09/S-05) -----------
+
+
+class ViaticoEditar(BaseModel):
+    """Edición parcial: solo cambian los campos enviados. El service decide, según la etapa
+    actual del viático, cuáles aplican (`422 VALOR_NO_PERMITIDO` para el resto)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    motivo_viaje: Motivo | None = None
+    proyecto_id: uuid.UUID | None = None
+    proyecto_otro: ProyectoOtro | None = None
+    lider_proyecto: LiderProyecto | None = None
+    empresa: Empresa | None = None
+    requiere_tiquete: bool | None = None
+    requiere_gastos_viaje: bool | None = None
+    comentarios: Comentarios | None = None
+    trayectos: Annotated[list[TrayectoEntradaSchema], Field(min_length=1, max_length=5)] | None = (
+        None
+    )
+    recursos_propios: bool | None = None
+
+
+# --- acciones de la máquina de estados (S2-05) ----------------------------------------------------
+
+
+class AccionEntrada(BaseModel):
+    """Cuerpo de `aprobar`/`rechazar`/`devolver`: el comentario es obligatorio solo para rechazar
+    y devolver (el service lo valida, `422 COMENTARIO_REQUERIDO`, para dar ese código exacto)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comentario: Comentario | None = None

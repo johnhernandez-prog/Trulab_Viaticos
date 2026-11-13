@@ -42,6 +42,10 @@ class AccionAuditoria(StrEnum):
     TARIFA_EDITAR = "TARIFA_EDITAR"
     TARIFA_DESACTIVAR = "TARIFA_DESACTIVAR"
     TARIFA_ACTIVAR = "TARIFA_ACTIVAR"
+    # Viáticos (S2-04b/S2-05): el historial funcional vive en `viatico_eventos`; aquí solo lo
+    # verdaderamente sensible (RF-014): la eliminación y la excepción de RN-27 para SUPERADMIN.
+    VIATICO_ELIMINAR = "VIATICO_ELIMINAR"
+    AUTOAPROBACION_SUPERADMIN = "AUTOAPROBACION_SUPERADMIN"
     ACCESO_DENEGADO = "ACCESO_DENEGADO"
     # Acceso híbrido (ADR-027).
     LOGIN_EXITOSO = "LOGIN_EXITOSO"
